@@ -1,0 +1,57 @@
+# ConstrSW 2026/2 - Grupo 04 (students)
+# Avaliacao Pratica T1 - sobe o Keycloak (com o realm "constrsw" e o client "oauth"
+# ja importados a partir do backup) e a API "oauth" que consome a REST API do Keycloak.
+#
+# Uso:
+#   docker compose up --build
+#
+# Keycloak:      http://localhost:8080  (admin console: usuario/senha em .env)
+# oauth API:     http://localhost:9000
+# Swagger UI:    http://localhost:9000/swagger-ui.html
+
+services:
+  keycloak:
+    image: quay.io/keycloak/keycloak:26.7.2
+    container_name: constrsw-keycloak
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
+      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
+      # Fixa o hostname interno para que o "iss" (issuer) dos tokens emitidos seja
+      # sempre http://keycloak:8080/realms/constrsw, independente de quem chamou
+      # (Postman via localhost:8080 ou o container "oauth" via rede interna do
+      # Docker) - e o que a API "oauth" usa para validar o Bearer token (JWKS).
+      KC_HOSTNAME: keycloak
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_HTTPS: "false"
+      KC_HTTP_ENABLED: "true"
+    ports:
+      - "8080:8080"
+    volumes:
+      - ./backend/oauth/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+    networks:
+      - constrsw
+
+  # Descomentado para a etapa "Configuracao + Login" do Grupo 04 (students).
+  oauth:
+    build:
+      context: ./backend/oauth
+      dockerfile: Dockerfile
+    container_name: constrsw-oauth
+    depends_on:
+      - keycloak
+    environment:
+      KEYCLOAK_URL: http://keycloak:8080
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+    ports:
+      - "9000:8080"
+    networks:
+      - constrsw
+
+networks:
+  constrsw:
+    driver: bridge
