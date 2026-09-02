@@ -46,11 +46,11 @@ services:
 
   # Auth - Keycloak Gateway API
   auth:
-    container_name: auth
+    container_name: oauth
     build:
-      context: ./backend/auth
+      context: ./backend/oauth
       dockerfile: Dockerfile
-    image: constrsw/auth
+    image: constrsw/oauth
     environment:
       - KEYCLOAK_SERVER_URL=${KEYCLOAK_SERVER_URL}
       - KEYCLOAK_REALM=${KEYCLOAK_REALM}
@@ -72,8 +72,6 @@ services:
     depends_on:
       keycloak:
         condition: service_healthy
-      otel-collector:
-        condition: service_started
     healthcheck:
       test:
         [
