@@ -1,0 +1,730 @@
+# Builds: cada serviço com `build:` compila/embalagem apenas no Dockerfile (não usar artefatos de build da máquina host no lugar do build da imagem). Ver README.md na raiz.
+networks:
+  constrsw:
+
+volumes:
+  # No terminal, criar o volume externo: docker volume create constrsw-prometheus-data
+  constrsw-prometheus-data:
+    external: true
+  # No terminal, criar o volume externo: docker volume create constrsw-keycloak-data
+  constrsw-keycloak-data:
+    external: true
+  # No terminal, criar o volume externo: docker volume create constrsw-postgresql-data
+  constrsw-postgresql-data:
+    external: true
+  # No terminal, criar o volume externo: docker volume create constrsw-mongodb-data
+  constrsw-mongodb-data:
+    external: true
+
+services:
+
+  # Prometheus
+  prometheus:
+    container_name: prometheus
+    build:
+      context: ./infrastructure/dev.local/services/prometheus
+      dockerfile: Dockerfile
+    image: constrsw/prometheus
+    environment:
+      - PROMETHEUS_INTERNAL_HOST=${PROMETHEUS_INTERNAL_HOST}
+      - PROMETHEUS_EXTERNAL_HOST=${PROMETHEUS_EXTERNAL_HOST}
+      - PROMETHEUS_INTERNAL_PORT=${PROMETHEUS_INTERNAL_PORT}
+      - PROMETHEUS_EXTERNAL_PORT=${PROMETHEUS_EXTERNAL_PORT}
+    volumes:
+      - constrsw-prometheus-data:/prometheus
+      - ./infrastructure/dev.local/services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - ./infrastructure/dev.local/services/prometheus/alerts.yml:/etc/prometheus/alerts.yml
+    networks:
+      - constrsw
+    ports:
+      - ${PROMETHEUS_EXTERNAL_PORT}:${PROMETHEUS_INTERNAL_PORT}
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+    restart: always
+
+  # OpenTelemetry Collector
+  otel-collector:
+    container_name: otel-collector
+    build:
+      context: ./infrastructure/dev.local/services/otel-collector
+      dockerfile: Dockerfile
+    image: constrsw/otel-collector
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./infrastructure/dev.local/services/otel-collector/otel-collector-config.yml:/etc/otelcol/config.yaml
+    ports:
+      - "4317:4317"   # OTLP gRPC receiver
+      - "4318:4318"   # OTLP HTTP receiver
+      - "8888:8888"   # Prometheus metrics endpoint
+      - "8889:8889"   # Prometheus exporter
+    networks:
+      - constrsw
+    depends_on:
+      - prometheus
+    restart: always
+
+  # Blackbox Exporter (para monitoramento de health checks)
+  blackbox-exporter:
+    container_name: blackbox-exporter
+    image: prom/blackbox-exporter:latest
+    volumes:
+      - ./infrastructure/dev.local/services/prometheus/blackbox.yml:/etc/blackbox_exporter/config.yml
+    networks:
+      - constrsw
+    ports:
+      - "9115:9115"
+    restart: always
+
+  # Keycloak
+  keycloak:
+    container_name: keycloak
+    build:
+      context: ./infrastructure/dev.local/services/keycloak
+      dockerfile: Dockerfile
+    image: constrsw/keycloak
+    environment:
+      - KC_HEALTH_ENABLED=${KC_HEALTH_ENABLED}
+      - KC_METRICS_ENABLED=${KC_METRICS_ENABLED}
+      - KC_HTTP_MANAGEMENT_PORT=${KC_HTTP_MANAGEMENT_PORT}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+    volumes:
+      # No terminal, criar o volume externo: docker volume create constrsw-keycloak-data
+      - constrsw-keycloak-data:/opt/keycloak/data
+      - ./infrastructure/dev.local/services/keycloak:/opt/keycloak/data/import
+    networks:
+      - constrsw
+    ports:
+      - ${KEYCLOAK_EXTERNAL_CONSOLE_PORT}:${KEYCLOAK_INTERNAL_CONSOLE_PORT}
+      - ${KEYCLOAK_EXTERNAL_METRICS_PORT}:${KEYCLOAK_INTERNAL_METRICS_PORT}
+    command: start-dev --import-realm
+    restart: always
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f ${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_METRICS_PORT}/health",
+        ]
+      start_period: 0s
+      interval: 20s
+      timeout: 10s
+      retries: 20
+
+  # Auth - Keycloak Gateway API
+  auth:
+    container_name: auth
+    build:
+      context: ./backend/auth
+      dockerfile: Dockerfile
+    image: constrsw/auth
+    environment:
+      - KEYCLOAK_SERVER_URL=${KEYCLOAK_SERVER_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - AUTH_INTERNAL_PROTOCOL=${AUTH_INTERNAL_PROTOCOL}
+      - AUTH_INTERNAL_HOST=${AUTH_INTERNAL_HOST}
+      - AUTH_INTERNAL_API_PORT=${AUTH_INTERNAL_API_PORT}
+      - AUTH_INTERNAL_DEBUG_PORT=${AUTH_INTERNAL_DEBUG_PORT}
+      - AUTH_INTERNAL_METRICS_PORT=${AUTH_INTERNAL_METRICS_PORT}
+    ports:
+      - "${AUTH_EXTERNAL_API_PORT}:${AUTH_INTERNAL_API_PORT}"
+      - "${AUTH_EXTERNAL_DEBUG_PORT}:${AUTH_INTERNAL_DEBUG_PORT}"
+      - "${AUTH_EXTERNAL_METRICS_PORT}:${AUTH_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      keycloak:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:'+(process.env.AUTH_INTERNAL_API_PORT)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
+
+  # PostgreSQL
+  postgresql:
+    container_name: postgresql
+    build:
+      context: ./infrastructure/dev.local/services/postgresql
+      dockerfile: Dockerfile
+      args:
+        POSTGRESQL_HOST_AUTH_METHOD: ${POSTGRESQL_HOST_AUTH_METHOD}
+        POSTGRESQL_DATA: ${POSTGRESQL_DATA}
+        POSTGRESQL_USERNAME: ${POSTGRESQL_USERNAME}
+        POSTGRESQL_PASSWORD: ${POSTGRESQL_PASSWORD}
+    image: constrsw/postgresql
+    environment:
+      - POSTGRESQL_INTERNAL_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - POSTGRESQL_INTERNAL_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - POSTGRES_USER=${POSTGRESQL_USERNAME}
+      - POSTGRES_PASSWORD=${POSTGRESQL_PASSWORD}
+      - POSTGRESQL_DB=${POSTGRESQL_DB}
+    volumes:
+      # No terminal, criar o volume externo: docker volume create constrsw-postgresql-data
+      - constrsw-postgresql-data:${POSTGRESQL_DATA}
+    networks:
+      - constrsw
+    ports:
+      - ${POSTGRESQL_EXTERNAL_PORT}:${POSTGRESQL_INTERNAL_PORT}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRESQL_USERNAME}"]
+      start_period: 0s
+      interval: 10s
+      timeout: 10s
+      retries: 10
+    restart: always
+
+  # PostgreSQL Exporter para o Prometheus
+  postgresql-exporter:
+    image: prometheuscommunity/postgres-exporter:latest
+    container_name: postgresql-exporter
+    environment:
+      - DATA_SOURCE_NAME=postgresql://${POSTGRESQL_USERNAME}:${POSTGRESQL_PASSWORD}@${POSTGRESQL_INTERNAL_HOST}:${POSTGRESQL_INTERNAL_PORT}/${POSTGRESQL_DB}?sslmode=disable
+    ports:
+      - "9187:9187"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: always
+
+  # MongoDB
+  mongodb:
+    container_name: mongodb
+    build:
+      context: ./infrastructure/dev.local/services/mongodb
+      dockerfile: Dockerfile
+      args:
+        - MONGO_INITDB_ROOT_USERNAME=${MONGODB_USERNAME}
+        - MONGO_INITDB_ROOT_PASSWORD=${MONGODB_PASSWORD}
+    image: constrsw/mongodb
+    environment:
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_INTERNAL_HOST=${MONGODB_INTERNAL_HOST}
+      - MONGODB_INTERNAL_PORT=${MONGODB_INTERNAL_PORT}
+    volumes:
+      # No terminal, criar o volume externo: docker volume create constrsw-mongodb-data
+      - constrsw-mongodb-data:/data/mongodb
+    networks:
+      - constrsw
+    ports:
+      - ${MONGODB_EXTERNAL_PORT}:${MONGODB_INTERNAL_PORT}
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "mongosh --quiet mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_INTERNAL_HOST}:${MONGODB_INTERNAL_PORT}/constrsw --eval 'quit(db.runCommand({ ping: 1 }).ok ? 0 : 2)'",
+        ]
+      start_period: 0s
+      interval: 20s
+      timeout: 10s
+      retries: 20
+    restart: always
+
+  # MongoDB Exporter para o Prometheus
+  mongodb-exporter:
+    image: percona/mongodb_exporter:0.40.0
+    container_name: mongodb-exporter
+    command:
+      - '--mongodb.uri=mongodb://${MONGODB_USERNAME}:${MONGODB_PASSWORD}@${MONGODB_INTERNAL_HOST}:${MONGODB_INTERNAL_PORT}/?authSource=${MONGODB_DB}'
+      - '--web.listen-address=:9216'
+      - '--collect-all'
+      - '--compatible-mode'
+    ports:
+      - "9216:9216"
+    networks:
+      - constrsw
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    restart: always
+
+  # Classes Services
+  classes:
+    container_name: classes
+    build:
+      context: ./backend/classes
+      dockerfile: Dockerfile
+    image: constrsw/classes
+    environment:
+      - DB_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - DB_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - DB_USER=${CLASSES_USERNAME}
+      - DB_PASSWORD=${CLASSES_PASSWORD}
+      - DB_NAME=${CLASSES_DB}
+      - APP_ENV=${APP_ENV:-development}
+      - DEBUG=${DEBUG:-false}
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+      - AUTH_ENABLED=${AUTH_ENABLED:-false}
+    ports:
+      - "${CLASSES_EXTERNAL_API_PORT}:${CLASSES_INTERNAL_API_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "curl -f http://localhost:${CLASSES_INTERNAL_API_PORT}/health || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
+
+  # Courses Services
+  courses:
+    container_name: courses
+    build:
+      context: ./backend/courses
+      dockerfile: Dockerfile
+    image: constrsw/courses
+    environment:
+      - DATABASE_URL=postgresql://${COURSES_USERNAME}:${COURSES_PASSWORD}@${POSTGRESQL_INTERNAL_HOST}:${POSTGRESQL_INTERNAL_PORT}/${COURSES_DB}
+      - PROMETHEUS_PORT=${COURSES_INTERNAL_METRICS_PORT:-9465}
+      - USE_MOCK_AUTH=false
+      - KEYCLOAK_URL=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_AUDIENCE=oauth
+    networks:
+      - constrsw
+    ports:
+      - ${COURSES_EXTERNAL_API_PORT}:${COURSES_INTERNAL_API_PORT}
+      - ${COURSES_EXTERNAL_METRICS_PORT}:${COURSES_INTERNAL_METRICS_PORT}
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://127.0.0.1:8000/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
+
+  # Employees Service
+  employees:
+    container_name: employees
+    build:
+      context: ./backend/employees
+      dockerfile: Dockerfile
+    image: constrsw/employees
+    environment:
+      - PORT=${EMPLOYEES_INTERNAL_API_PORT}
+      - DB_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - DB_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - DB_USER=${EMPLOYEES_USERNAME}
+      - DB_PASSWORD=${EMPLOYEES_PASSWORD}
+      - DB_NAME=${EMPLOYEES_DB}
+      - APP_ENV=local
+      - APP_VERSION=1.0.0
+      - AUTH_BASE_URL=${AUTH_INTERNAL_PROTOCOL}://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_VALIDATE_PATH=/auth/validate
+      - AUTH_JWKS_PATH=/auth/jwks
+      - JWT_ISSUER=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}/realms/${KEYCLOAK_REALM}
+      - JWT_AUDIENCE=oauth
+      - JWT_CLIENT_AUDIENCE=${KEYCLOAK_CLIENT_ID}
+      - OTEL_SERVICE_NAME=employees-service
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://otel-collector:4318/v1/metrics
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
+      - JAVA_TOOL_OPTIONS=-agentlib:jdwp=transport=dt_socket,server=y,suspend=n,address=*:${EMPLOYEES_INTERNAL_DEBUG_PORT}
+    ports:
+      - "${EMPLOYEES_EXTERNAL_API_PORT}:${EMPLOYEES_INTERNAL_API_PORT}"
+      - "${EMPLOYEES_EXTERNAL_DEBUG_PORT}:${EMPLOYEES_INTERNAL_DEBUG_PORT}"
+      - "${EMPLOYEES_EXTERNAL_METRICS_PORT}:${EMPLOYEES_INTERNAL_API_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://127.0.0.1:${EMPLOYEES_INTERNAL_API_PORT}/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
+
+  # Lessons
+  lessons:
+    container_name: lessons
+    build:
+      context: ./backend/lessons
+      dockerfile: Dockerfile
+    image: constrsw/lessons
+    environment:
+      - PORT=${LESSONS_INTERNAL_API_PORT}
+      - METRICS_PORT=${LESSONS_INTERNAL_METRICS_PORT}
+      - DB_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - DB_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - DB_NAME=${LESSONS_DB}
+      - DB_USERNAME=${LESSONS_USERNAME}
+      - DB_PASSWORD=${LESSONS_PASSWORD}
+      - AUTH_BASE_URL=${AUTH_INTERNAL_PROTOCOL}://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_JWKS_PATH=/auth/jwks
+      - JWT_ISSUER=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}/realms/${KEYCLOAK_REALM}
+      - JWT_AUDIENCE=oauth
+      - JWT_JWKS_CACHE_TTL_MS=600000
+      - NODE_OPTIONS=--inspect=0.0.0.0:${LESSONS_INTERNAL_DEBUG_PORT}
+    ports:
+      - "${LESSONS_EXTERNAL_API_PORT}:${LESSONS_INTERNAL_API_PORT}"
+      - "${LESSONS_EXTERNAL_DEBUG_PORT}:${LESSONS_INTERNAL_DEBUG_PORT}"
+      - "${LESSONS_EXTERNAL_METRICS_PORT}:${LESSONS_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    restart: always
+
+  # Professors Service
+  professors:
+    container_name: professors
+    build:
+      context: ./backend/professors
+      dockerfile: Dockerfile
+    image: constrsw/professors
+    environment:
+      - MONGODB_INTERNAL_HOST=${MONGODB_INTERNAL_HOST}
+      - MONGODB_INTERNAL_PORT=${MONGODB_INTERNAL_PORT}
+      - MONGODB_USERNAME=${MONGODB_USERNAME}
+      - MONGODB_PASSWORD=${MONGODB_PASSWORD}
+      - MONGODB_DB=${MONGODB_DB}
+      - PROFESSORS_DB=${PROFESSORS_DB}
+      - PROFESSORS_INTERNAL_API_PORT=${PROFESSORS_INTERNAL_API_PORT}
+      - PROFESSORS_INTERNAL_DEBUG_PORT=${PROFESSORS_INTERNAL_DEBUG_PORT}
+      - PROFESSORS_INTERNAL_METRICS_PORT=${PROFESSORS_INTERNAL_METRICS_PORT}
+      - AUTH_BASE_URL=${AUTH_INTERNAL_PROTOCOL}://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_JWKS_PATH=/auth/jwks
+      - AUTH_VALIDATE_PATH=/auth/validate
+      - EMPLOYEES_BASE_URL=${EMPLOYEES_INTERNAL_PROTOCOL}://${EMPLOYEES_INTERNAL_HOST}:${EMPLOYEES_INTERNAL_API_PORT}/api/v1
+      - JWT_ISSUER=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}/realms/${KEYCLOAK_REALM}
+      - JWT_AUDIENCE=oauth
+      - JWT_JWKS_CACHE_TTL_MS=600000
+      - NODE_OPTIONS=--inspect=0.0.0.0:${PROFESSORS_INTERNAL_DEBUG_PORT}
+    ports:
+      - "${PROFESSORS_EXTERNAL_API_PORT}:${PROFESSORS_INTERNAL_API_PORT}"
+      - "${PROFESSORS_EXTERNAL_DEBUG_PORT}:${PROFESSORS_INTERNAL_DEBUG_PORT}"
+      - "${PROFESSORS_EXTERNAL_METRICS_PORT}:${PROFESSORS_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      mongodb:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      employees:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:'+(process.env.PROFESSORS_INTERNAL_API_PORT)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    restart: always
+
+  # Reservations
+  reservations:
+    container_name: reservations
+    build:
+      context: ./backend/reservations
+      dockerfile: Dockerfile
+    image: constrsw/reservations
+    environment:
+      - ASPNETCORE_ENVIRONMENT=Production
+      - POSTGRES_CONNECTION_STRING=Host=${POSTGRESQL_INTERNAL_HOST};Port=${POSTGRESQL_INTERNAL_PORT};Database=${RESERVATIONS_DB};Username=${RESERVATIONS_USERNAME};Password=${RESERVATIONS_PASSWORD}
+      - AUTH_API_JWKS_URI=http://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}/.well-known/jwks.json
+      - AUTH_API_ISSUER=http://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_API_AUDIENCE=reservation-api
+      - OTEL_EXPORTER_OTLP_ENDPOINT=http://otel-collector:4317
+      - OTEL_SERVICE_NAME=reservations
+    ports:
+      - ${RESERVATIONS_EXTERNAL_API_PORT}:${RESERVATIONS_INTERNAL_API_PORT}
+      - ${RESERVATIONS_EXTERNAL_METRICS_PORT}:${RESERVATIONS_INTERNAL_METRICS_PORT}
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://127.0.0.1:${RESERVATIONS_INTERNAL_API_PORT}/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    restart: always
+
+  # Resources Service
+  resources:
+    container_name: resources
+    build:
+      context: ./backend/resources
+      dockerfile: Dockerfile
+    image: constrsw/resources
+    environment:
+      - PORT=${RESOURCES_INTERNAL_API_PORT}
+      - METRICS_PORT=${RESOURCES_INTERNAL_METRICS_PORT}
+      - DB_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - DB_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - DB_USER=${RESOURCES_USERNAME}
+      - DB_PASSWORD=${RESOURCES_PASSWORD}
+      - DB_NAME=${RESOURCES_DB}
+    ports:
+      - "${RESOURCES_EXTERNAL_API_PORT}:${RESOURCES_INTERNAL_API_PORT}"
+      - "${RESOURCES_EXTERNAL_DEBUG_PORT}:${RESOURCES_INTERNAL_DEBUG_PORT}"
+      - "${RESOURCES_EXTERNAL_METRICS_PORT}:${RESOURCES_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+    restart: always
+
+  # Rooms
+  rooms:
+    container_name: ${ROOMS_INTERNAL_HOST}
+    build:
+      context: ./backend/rooms
+      dockerfile: Dockerfile
+    image: constrsw/rooms
+    environment:
+      # Database (central PostgreSQL, rooms DB)
+      - DB_HOST=${POSTGRESQL_INTERNAL_HOST}
+      - DB_PORT=${POSTGRESQL_INTERNAL_PORT}
+      - DB_NAME=${ROOMS_DB}
+      - DB_USER=${ROOMS_USERNAME}
+      - DB_PASSWORD=${ROOMS_PASSWORD}
+      # JWT validation (same convention as the other services): JWKS keys are retrieved from the
+      # AUTH service, while the issuer and strict audience are validated locally by rooms.
+      - AUTH_BASE_URL=${AUTH_INTERNAL_PROTOCOL}://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_JWKS_PATH=/auth/jwks
+      - JWT_ISSUER=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}/realms/${KEYCLOAK_REALM}
+      - JWT_AUDIENCE=oauth
+      # OpenTelemetry Collector OTLP/HTTP endpoint for metric push (T1.2)
+      - OTLP_METRICS_URL=http://otel-collector:4318/v1/metrics
+    ports:
+      - ${ROOMS_EXTERNAL_API_PORT}:${ROOMS_INTERNAL_API_PORT}
+      - ${ROOMS_EXTERNAL_METRICS_PORT}:${ROOMS_INTERNAL_METRICS_PORT}
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "wget -qO- http://127.0.0.1:${ROOMS_INTERNAL_API_PORT}/api/v1/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    restart: always
+  
+  # Students
+  students:
+    container_name: students
+    build:
+      context: ./backend/students
+      dockerfile: Dockerfile
+    image: constrsw/students
+    environment:
+      PORT: ${STUDENTS_INTERNAL_API_PORT}
+      DATABASE_URL: postgres://${STUDENTS_USERNAME}:${STUDENTS_PASSWORD}@${POSTGRESQL_INTERNAL_HOST}:${POSTGRESQL_INTERNAL_PORT}/${STUDENTS_DB}
+
+      # URL interna usada pela API dentro do Docker para buscar o JWKS
+      KEYCLOAK_AUTH_SERVER_URL: ${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}
+
+      # Issuer público que aparece dentro do token JWT
+      KEYCLOAK_ISSUER: ${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}
+
+      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
+      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
+      KEYCLOAK_AUDIENCE: ${KEYCLOAK_CLIENT_ID}
+      SESSION_SECRET: ${KEYCLOAK_CLIENT_SECRET}
+    ports:
+      - "${STUDENTS_EXTERNAL_API_PORT}:${STUDENTS_INTERNAL_API_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      postgresql:
+        condition: service_healthy
+      auth:
+        condition: service_healthy
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:'+(process.env.PORT)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
+
+  # BFF (Backend for Frontend) Service
+  bff:
+    container_name: api
+    build:
+      context: ./backend/bff
+      dockerfile: Dockerfile
+    image: constrsw/bff
+    environment:
+      - PORT=${BFF_INTERNAL_API_PORT}
+      - APP_ENV=local
+      - APP_VERSION=1.0.0
+      # Autenticacao (auth permanece isolado; BFF valida JWT localmente via JWKS)
+      - AUTH_BASE_URL=${AUTH_INTERNAL_PROTOCOL}://${AUTH_INTERNAL_HOST}:${AUTH_INTERNAL_API_PORT}
+      - AUTH_JWKS_PATH=/auth/jwks
+      - AUTH_VALIDATE_PATH=/auth/validate
+      - JWT_ISSUER=${KEYCLOAK_INTERNAL_PROTOCOL}://${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_API_PORT}/realms/${KEYCLOAK_REALM}
+      - JWT_AUDIENCE=oauth
+      - JWT_CLIENT_AUDIENCE=${KEYCLOAK_CLIENT_ID}
+      # Base URLs dos servicos agregados (alguns ainda nao definidos no compose)
+      - CLASSES_BASE_URL=${CLASSES_INTERNAL_PROTOCOL}://${CLASSES_INTERNAL_HOST}:${CLASSES_INTERNAL_API_PORT}
+      - COURSES_BASE_URL=${COURSES_INTERNAL_PROTOCOL}://${COURSES_INTERNAL_HOST}:${COURSES_INTERNAL_API_PORT}
+      - EMPLOYEES_BASE_URL=${EMPLOYEES_INTERNAL_PROTOCOL}://${EMPLOYEES_INTERNAL_HOST}:${EMPLOYEES_INTERNAL_API_PORT}/api/v1
+      - LESSONS_BASE_URL=${LESSONS_INTERNAL_PROTOCOL}://${LESSONS_INTERNAL_HOST}:${LESSONS_INTERNAL_API_PORT}
+      - PROFESSORS_BASE_URL=${PROFESSORS_INTERNAL_PROTOCOL}://${PROFESSORS_INTERNAL_HOST}:${PROFESSORS_INTERNAL_API_PORT}
+      - RESERVATIONS_BASE_URL=${RESERVATIONS_INTERNAL_PROTOCOL}://${RESERVATIONS_INTERNAL_HOST}:${RESERVATIONS_INTERNAL_API_PORT}
+      - RESOURCES_BASE_URL=${RESOURCES_INTERNAL_PROTOCOL}://${RESOURCES_INTERNAL_HOST}:${RESOURCES_INTERNAL_API_PORT}
+      - ROOMS_BASE_URL=${ROOMS_INTERNAL_PROTOCOL}://${ROOMS_INTERNAL_HOST}:${ROOMS_INTERNAL_API_PORT}
+      # Resiliencia (HTTP e circuit breaker por downstream)
+      - BFF_HTTP_TIMEOUT_MS=${BFF_HTTP_TIMEOUT_MS}
+      - BFF_HTTP_RETRIES=${BFF_HTTP_RETRIES}
+      - BFF_CIRCUIT_BREAKER_TIMEOUT_MS=${BFF_CIRCUIT_BREAKER_TIMEOUT_MS}
+      - BFF_CIRCUIT_BREAKER_ERROR_THRESHOLD_PERCENTAGE=${BFF_CIRCUIT_BREAKER_ERROR_THRESHOLD_PERCENTAGE}
+      - BFF_CIRCUIT_BREAKER_RESET_TIMEOUT_MS=${BFF_CIRCUIT_BREAKER_RESET_TIMEOUT_MS}
+      - BFF_CIRCUIT_BREAKER_VOLUME_THRESHOLD=${BFF_CIRCUIT_BREAKER_VOLUME_THRESHOLD}
+      - BFF_CIRCUIT_BREAKER_ROLLING_WINDOW_MS=${BFF_CIRCUIT_BREAKER_ROLLING_WINDOW_MS}
+      # Observabilidade
+      - OTEL_SERVICE_NAME=bff-service
+      - BFF_INTERNAL_METRICS_PORT=${BFF_INTERNAL_METRICS_PORT}
+      - OTEL_EXPORTER_OTLP_METRICS_ENDPOINT=http://otel-collector:4318/v1/metrics
+      - OTEL_EXPORTER_OTLP_TRACES_ENDPOINT=http://otel-collector:4318/v1/traces
+      - NODE_OPTIONS=--inspect=0.0.0.0:${BFF_INTERNAL_DEBUG_PORT}
+    ports:
+      - "${BFF_EXTERNAL_API_PORT}:${BFF_INTERNAL_API_PORT}"
+      - "${BFF_EXTERNAL_DEBUG_PORT}:${BFF_INTERNAL_DEBUG_PORT}"
+      - "${BFF_EXTERNAL_METRICS_PORT}:${BFF_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      auth:
+        condition: service_healthy
+      employees:
+        condition: service_healthy
+      professors:
+        condition: service_healthy
+      resources:
+        condition: service_started
+      otel-collector:
+        condition: service_started
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "require('http').get('http://127.0.0.1:'+(process.env.PORT)+'/health',(r)=>process.exit(r.statusCode===200?0:1)).on('error',()=>process.exit(1))",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 25s
+    restart: always
+
+  # Frontend — Closed CRAS SPA
+  frontend:
+    container_name: frontend
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_AUTH_BASE_URL: ${VITE_AUTH_BASE_URL}
+        VITE_BFF_BASE_URL: ${VITE_BFF_BASE_URL}
+    image: constrsw/frontend
+    ports:
+      - "${FRONTEND_EXTERNAL_PORT}:${FRONTEND_INTERNAL_PORT}"
+    networks:
+      - constrsw
+    depends_on:
+      auth:
+        condition: service_healthy
+      bff:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          "curl -f http://127.0.0.1/health || exit 1",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    restart: always
