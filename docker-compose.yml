@@ -27,21 +27,38 @@ services:
       KC_HOSTNAME_STRICT: "false"
       KC_HOSTNAME_STRICT_HTTPS: "false"
       KC_HTTP_ENABLED: "true"
+      KC_HEALTH_ENABLED: "true"
     ports:
       - "8080:8080"
     volumes:
       - ./backend/oauth/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
     networks:
       - constrsw
+    healthcheck:
+      # A imagem do Keycloak (ubi9-micro) nao tem curl/wget; abrimos um socket TCP
+      # cru (recurso do bash) para a porta de management (9000, interna ao
+      # container) e conferimos o "200" na resposta HTTP do /health/ready.
+      test:
+        - CMD-SHELL
+        - "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -Eq '\"status\"[[:space:]]*:[[:space:]]*\"UP\"' <&3"
+      interval: 5s
+      timeout: 5s
+      retries: 30
+      start_period: 15s
 
   # Descomentado para a etapa "Configuracao + Login" do Grupo 04 (students).
+  # So sobe depois que o healthcheck acima confirmar que o Keycloak esta pronto
+  # (realm importado e endpoint de token respondendo) - evita o 503 de
+  # "Keycloak indisponivel" que a API "oauth" reporta quando tenta logar antes
+  # da hora.
   oauth:
     build:
       context: ./backend/oauth
       dockerfile: Dockerfile
     container_name: constrsw-oauth
     depends_on:
-      - keycloak
+      keycloak:
+        condition: service_healthy
     environment:
       KEYCLOAK_URL: http://keycloak:8080
       KEYCLOAK_REALM: ${KEYCLOAK_REALM}
