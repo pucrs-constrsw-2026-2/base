@@ -45,7 +45,7 @@ services:
       retries: 20
 
   # Auth - Keycloak Gateway API
-  auth:
+  oauth:
     container_name: oauth
     build:
       context: ./backend/oauth
