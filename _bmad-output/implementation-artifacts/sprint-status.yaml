@@ -1,0 +1,122 @@
+# generated: 2026-09-03
+# last_updated: 2026-09-08
+# story 1.1 created → epic-1 in-progress, 1-1 ready-for-dev (story file only; no app code)
+# 2026-09-08 batch create-story: remaining 25 stories → ready-for-dev (files only).
+#   epic-1 stays in-progress; epics 2–6 stay backlog until implementation starts.
+#   No application code in this batch.
+# project: constrsw-2026-2
+# project_key: NOKEY
+# tracking_system: file-system
+# story_location: {project-root}/_bmad-output/implementation-artifacts
+#
+# SCOPE (Grupo 07 Keycloak/oauth only):
+#   6 epics, 26 stories from _bmad-output/planning-artifacts/epics.md
+#   Contract: _bmad-output/specs/spec-grupo07-keycloak-oauth/ (SPEC.md + oauth-api.md + keycloak-authz.md)
+#   Implementation: backend/oauth (group branch)
+#   Out of scope: professors domain API, invented docker-compose.yml / .env
+#   Work order: Epic 1 → 2 → 3 → 4 → 5 → 6; stories in numeric order within each epic
+#
+# PROFESSOR STACK (merged from main 2026-09-03):
+#   Root docker-compose.yml + .env exist; oauth service is ALREADY enabled.
+#   Realm import: infrastructure/dev.local/services/keycloak/constrsw.json
+#   Keycloak image: 26.0.1 (professor Dockerfile). Console http://localhost:8081
+#   oauth API external port: 8181. Env: KEYCLOAK_SERVER_URL, KEYCLOAK_REALM,
+#   KEYCLOAK_CLIENT_ID, KEYCLOAK_CLIENT_SECRET (+ KEYCLOAK_ADMIN*).
+#   Story 1.3 = VERIFY build/run against professor compose (NOT uncomment / invent).
+#   Epic 6.1–6.4 = VERIFY/align import first; create only gaps. 6.5 = implement validate.
+#   No blockers. Do not invent compose/.env.
+#
+# STATUS DEFINITIONS:
+# ==================
+# Epic Status:
+#   - backlog: Epic not yet started
+#   - in-progress: Epic actively being worked on
+#   - done: All stories in epic completed
+#
+# Epic Status Transitions:
+#   - backlog → in-progress: Automatically when first story is created (via create-story)
+#   - in-progress → done: Manually when all stories reach 'done' status
+#
+# Story Status:
+#   - backlog: Story only exists in epic file
+#   - ready-for-dev: Story file created in stories folder
+#   - in-progress: Developer actively working on implementation
+#   - review: Ready for code review (via Dev's code-review workflow)
+#   - done: Story completed
+#
+# Retrospective Status:
+#   - optional: Can be completed but not required
+#   - done: Retrospective has been completed
+#
+# Action Item Status:
+#   - open: Committed during a retrospective, not yet addressed
+#   - in-progress: Actively being worked on
+#   - done: Completed
+#
+# WORKFLOW NOTES:
+# ===============
+# - Epic transitions to 'in-progress' automatically when first story is created
+# - Stories are worked sequentially (Epic 1 → 6, numeric order) unless capacity allows parallel
+# - Developer typically creates next story after previous one is 'done' to incorporate learnings
+# - Dev moves story to 'review', then runs code-review (fresh context, different LLM recommended)
+# - Retrospective appends its action items to action_items; sprint-status surfaces open ones
+# - Story 1.3 verifies oauth against professor compose (service already present)
+
+generated: 2026-09-03
+last_updated: 2026-09-08
+project: constrsw-2026-2
+project_key: NOKEY
+tracking_system: file-system
+story_location: "{project-root}/_bmad-output/implementation-artifacts"
+
+development_status:
+  # Epic 1: Run oauth on the professor Keycloak stack (FR17)
+  epic-1: in-progress
+  1-1-load-keycloak-settings-from-professor-environment: ready-for-dev
+  1-2-dockerfile-for-the-oauth-api-image: ready-for-dev
+  # Professor compose already has oauth enabled — verify wiring, do not invent compose
+  1-3-verify-oauth-runs-on-professor-provided-compose: ready-for-dev
+  epic-1-retrospective: optional
+
+  # Epic 2: Sign in and renew access (FR1, FR2, FR3)
+  epic-2: backlog
+  2-1-login-with-username-and-password: ready-for-dev
+  2-2-refresh-tokens-without-re-entering-password: ready-for-dev
+  epic-2-retrospective: optional
+
+  # Epic 3: Surface uniform oauth error diagnostics (FR14)
+  epic-3: backlog
+  3-1-oa-error-envelope-and-mapper: ready-for-dev
+  3-2-oa-error-body-on-login-and-refresh-failures: ready-for-dev
+  epic-3-retrospective: optional
+
+  # Epic 4: Administer Keycloak users (FR4–FR10)
+  epic-4: backlog
+  4-1-create-user: ready-for-dev
+  4-2-list-users: ready-for-dev
+  4-3-get-user-by-id: ready-for-dev
+  4-4-update-user-attributes: ready-for-dev
+  4-5-change-user-password: ready-for-dev
+  4-6-soft-delete-user: ready-for-dev
+  epic-4-retrospective: optional
+
+  # Epic 5: Administer roles and assignments (FR11, FR12, FR13)
+  epic-5: backlog
+  5-1-create-role: ready-for-dev
+  5-2-list-roles: ready-for-dev
+  5-3-get-role-by-id: ready-for-dev
+  5-4-replace-role: ready-for-dev
+  5-5-partially-update-role: ready-for-dev
+  5-6-logical-delete-role: ready-for-dev
+  5-7-assign-role-to-user: ready-for-dev
+  5-8-unassign-role-from-user: ready-for-dev
+  epic-5-retrospective: optional
+
+  # Epic 6: Authorize and validate resource access (FR15, FR16)
+  epic-6: backlog
+  6-1-ensure-b-2-client-roles-on-oauth: ready-for-dev
+  6-2-authorization-resources-with-urls: ready-for-dev
+  6-3-role-policies-on-client-oauth: ready-for-dev
+  6-4-resource-based-permissions: ready-for-dev
+  6-5-validate-resource-access-via-keycloak-authorization-services: ready-for-dev
+  epic-6-retrospective: optional
