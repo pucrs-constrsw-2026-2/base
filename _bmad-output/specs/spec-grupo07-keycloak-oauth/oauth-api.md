@@ -14,7 +14,7 @@ Companion to `SPEC-grupo07-keycloak-oauth`. Load-bearing HTTP contract for CAP-1
 - Root `docker-compose.yml` already defines/enables service `oauth` — **verify** build/run; do not invent compose as a deliverable.
 - External API port **8181**; Keycloak console **8081**; create volume `constrsw-keycloak-data` before first `compose up`.
 - Upstream Keycloak calls use OIDC paths under `{KEYCLOAK_SERVER_URL}/realms/constrsw/…` (no `/auth` unless base URL includes it).
-- Login contract for this API remains **form-data + HTTP 201** (T1/SPEC), even if Keycloak README shows a JSON curl example.
+- Login contract for this API remains **form-data + HTTP 200**, even if Keycloak README shows a JSON curl example.
 
 ## Error body (all error responses)
 
@@ -41,10 +41,10 @@ Companion to `SPEC-grupo07-keycloak-oauth`. Load-bearing HTTP contract for CAP-1
 | | |
 | --- | --- |
 | Headers | none required |
-| Body | form-data: `username`, `password` only |
-| Server adds | `client_id`, `client_secret`, `grant_type=password` from env |
+| Body | form-data: `username`, `password`. Extra fields the brief lists (`client_id`, `grant_type`) are **accepted and ignored** — never rejected, never used |
+| Server adds | `client_id`, `client_secret`, `grant_type=password` from env — always, regardless of what the client sent |
 | Keycloak | `POST {keycloak-base}/realms/constrsw/protocol/openid-connect/token` |
-| Success | `201` |
+| Success | `200` |
 | Body | `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in` (spelling as brief) |
 | Errors | `400` bad structure; `401` bad credentials |
 
@@ -72,7 +72,7 @@ All user routes (except where noted) require `Authorization: Bearer {{access_tok
 
 ### `GET /users`
 
-- Query: optional `?enabled=true|false`
+- Query: optional `?enabled=true|false`; **default (no query) = enabled users only**, per the brief
 - Success `200`: list of `{ id, username, first-name, last-name, enabled }`
 - Errors: `400`, `401`, `403`
 
@@ -125,7 +125,7 @@ Target role names for authz alignment: `administrator`, `coordinator`, `professo
 
 | Conflict | Resolution |
 | --- | --- |
-| Login body includes client_id/grant_type? | No — client credentials server-side only |
-| Login `201` vs Keycloak `200` | API returns `201` |
+| Login body includes client_id/grant_type? | Client may send them (the brief's form lists them), but the API ignores them; credentials are server-side only |
+| Login success status | `200` — the brief leaves it as `???`; nothing is created, and Keycloak itself returns `200` |
 | `/auth` prefix | Prefer none (KC 26); verify professor base URL |
 | Refresh | In scope via `POST /refresh` |

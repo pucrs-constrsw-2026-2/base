@@ -25,7 +25,7 @@ so that graders can start the stack without a group-invented compose file.
 
 2. **Given** the professor Keycloak README / compose ops notes
    **When** the oauth README is updated
-   **Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `201`) even if the Keycloak README shows a JSON curl example
+   **Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `200`) even if the Keycloak README shows a JSON curl example
 
 ## Tasks / Subtasks
 
@@ -40,7 +40,7 @@ so that graders can start the stack without a group-invented compose file.
   - [ ] Do **not** implement `/login` to “prove” Keycloak — resolution + healthy is enough. Login is Story 2.1
 - [ ] Task 3 — oauth README ops (AC: #2)
   - [ ] Document: `docker volume create constrsw-keycloak-data`; Keycloak console `http://localhost:8081`; oauth API `http://localhost:8181`
-  - [ ] Document: **our** login (Story 2.1) is form-data/`x-www-form-urlencoded` + HTTP `201` per SPEC — **not** the Keycloak README JSON curl to `:8181/login`
+  - [ ] Document: **our** login (Story 2.1) is form-data/`x-www-form-urlencoded` + HTTP `200` per SPEC — **not** the Keycloak README JSON curl to `:8181/login`
   - [ ] Document import caveat: `--import-realm` only imports if the realm is absent on the volume (professor Keycloak README)
   - [ ] Do not paste secret values from `.env` or `constrsw.json`
 - [ ] Task 4 — Record verification, no extra deliverables
@@ -149,7 +149,7 @@ Canonical contract: `_bmad-output/specs/spec-grupo07-keycloak-oauth/` (`SPEC.md`
 
 ## Previous story intelligence
 
-Story 1.2 must ship Dockerfile + `/health` + listen **before** this verify story is meaningful. Story 1.1 supplies env names. Keycloak README (`infrastructure/dev.local/services/keycloak/README.md`) uses JSON `POST http://localhost:8181/login` and mentions service `auth` — **superseded** for Grupo 07 by SPEC/T1 (`oauth`, form-data, `201`).
+Story 1.2 must ship Dockerfile + `/health` + listen **before** this verify story is meaningful. Story 1.1 supplies env names. Keycloak README (`infrastructure/dev.local/services/keycloak/README.md`) uses JSON `POST http://localhost:8181/login` and mentions service `auth` — **superseded** for Grupo 07 by SPEC/T1 (`oauth`, form-data, `200`).
 
 ## Latest tech information
 

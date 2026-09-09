@@ -43,7 +43,7 @@ so that token-route failures match the grader contract.
 - [ ] Task 1 — Login errors → OA (AC: #1, #2)
   - [ ] Structure failures: `400` + `OA-400` (or documented equivalent)
   - [ ] Bad credentials: `401` + relay KC `error` (typically `invalid_grant`)
-  - [ ] Success path **unchanged** (`201` + token fields)
+  - [ ] Success path **unchanged** (`200` + token fields)
 - [ ] Task 2 — Refresh errors → OA (AC: #3, #4)
   - [ ] Same mapping; success remains `200`
   - [ ] 401 stack includes upstream KC error object(s)

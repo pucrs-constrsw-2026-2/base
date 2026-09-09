@@ -20,15 +20,15 @@ Traceability source (not a second source of truth): `_bmad-output/planning-artif
 
 ### Functional Requirements
 
-FR1: A caller can `POST /login` with form-data `username` and `password` only (no client credentials). The API adds `client_id`, `client_secret`, and `grant_type=password` from env and calls Keycloak `POST {keycloak-base}/realms/constrsw/protocol/openid-connect/token`. (CAP-1)
+FR1: A caller can `POST /login` with form-data `username` and `password`. Extra fields the T1 brief lists in the form (`client_id`, `grant_type`) are accepted and ignored rather than rejected; client-supplied credentials are never used. The API adds `client_id`, `client_secret`, and `grant_type=password` from env and calls Keycloak `POST {keycloak-base}/realms/constrsw/protocol/openid-connect/token`. (CAP-1)
 
-FR2: Successful login returns HTTP `201` and JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in` (brief spelling). Invalid structure → `400`; bad credentials → `401`. (CAP-1)
+FR2: Successful login returns HTTP `200` and JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in` (brief spelling). Invalid structure → `400`; bad credentials → `401`. (CAP-1)
 
 FR3: A caller can `POST /refresh` with form-data `refresh_token`. The API adds `client_id`, `client_secret`, and `grant_type=refresh_token` and posts to the same Keycloak token endpoint. Success `200` returns the same token field set as login (including `referesh_expires_in` if Keycloak returns refresh expiry). Invalid structure → `400`; invalid/expired refresh → `401`. (CAP-7)
 
 FR4: An authenticated caller can `POST /users` with JSON `username` (email), `password`, `first-name`, `last-name`. Success `201` returns `{ id, username, first-name, last-name, enabled }` where `id` is taken from Keycloak `Location`. Invalid structure or username failing RFC 5322 email validation → `400`; duplicate username → `409`. (CAP-2)
 
-FR5: An authenticated caller can `GET /users` and receive `200` with a list of `{ id, username, first-name, last-name, enabled }`, optionally filtered by `?enabled=true|false`. (CAP-2)
+FR5: An authenticated caller can `GET /users` and receive `200` with a list of `{ id, username, first-name, last-name, enabled }`. With no query string the list contains **only enabled users**, per the T1 brief ("todos os usuários cadastrados e habilitados"); `?enabled=true|false` selects explicitly. (CAP-2)
 
 FR6: An authenticated caller can `GET /users/{{id}}` and receive `200` with the same user object shape; missing user → `404`. (CAP-2)
 
@@ -62,11 +62,11 @@ NFR2: Realm is `constrsw`; client is `oauth` (confidential); email is username.
 
 NFR3: Prefer Keycloak 26 URL style without `/auth` (`…/realms/{realm}/…`). If the professor base URL includes `/auth`, use that base instead. Verify on first bring-up.
 
-NFR4: Login body from clients is username + password only; client credentials stay server-side.
+NFR4: Login body from clients is username + password; extra brief-listed fields (`client_id`, `grant_type`) are accepted and ignored. Client credentials stay server-side and a client-supplied value is never trusted or logged.
 
 NFR5: Preserve response field spelling `referesh_expires_in` as in the brief.
 
-NFR6: Login success status is `201` (T1), not Keycloak’s native `200`. Refresh success status is `200`.
+NFR6: Login success status is `200` — the T1 brief leaves this route's response codes undefined (`???`) and nothing is created. Refresh success status is `200`.
 
 NFR7: Soft-delete users (disable) and logically delete roles; do not hard-delete unless the brief requires otherwise.
 
@@ -102,7 +102,7 @@ None. This SPEC is an HTTP API with no UI; UX `DESIGN.md` / `EXPERIENCE.md` are 
 ### FR Coverage Map
 
 FR1: Epic 2 - Login exchanges username/password for Keycloak tokens (no client credentials from caller)
-FR2: Epic 2 - Login returns 201 and token fields including `referesh_expires_in`; 400/401 on failure
+FR2: Epic 2 - Login returns 200 and token fields including `referesh_expires_in`; 400/401 on failure
 FR3: Epic 2 - Refresh tokens via `POST /refresh` with 200 success and 400/401 on failure
 FR4: Epic 4 - Create user (`POST /users`) with RFC 5322 and duplicate handling
 FR5: Epic 4 - List users (`GET /users`) with optional `enabled` filter
@@ -126,7 +126,7 @@ The API image builds from `backend/oauth` and runs against the professor-provide
 **FRs covered:** FR17
 
 ### Epic 2: Sign in and renew access
-A caller gets Keycloak tokens with username/password only, then refreshes without re-entering the password. Login `201`, refresh `200`, `referesh_expires_in` preserved.
+A caller gets Keycloak tokens with username/password only, then refreshes without re-entering the password. Login `200`, refresh `200`, `referesh_expires_in` preserved.
 **FRs covered:** FR1, FR2, FR3
 
 ### Epic 3: Surface uniform oauth error diagnostics
@@ -210,11 +210,11 @@ So that graders can start the stack without a group-invented compose file.
 
 **Given** the professor Keycloak README / compose ops notes
 **When** the oauth README is updated
-**Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `201`) even if the Keycloak README shows a JSON curl example
+**Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `200`) even if the Keycloak README shows a JSON curl example
 
 ## Epic 2: Sign in and renew access
 
-A caller gets Keycloak tokens with username/password only, then refreshes without re-entering the password. Login `201`, refresh `200`, `referesh_expires_in` preserved.
+A caller gets Keycloak tokens with username/password only, then refreshes without re-entering the password. Login `200`, refresh `200`, `referesh_expires_in` preserved.
 
 **FRs covered:** FR1, FR2, FR3  
 **NFRs:** NFR4, NFR5, NFR6
@@ -230,9 +230,9 @@ So that I receive Keycloak tokens without sending client credentials.
 **Acceptance Criteria:**
 
 **Given** valid credentials for a user in realm `constrsw`
-**When** the caller `POST /login` with `username` and `password` only (no `client_id` / `client_secret` / `grant_type`) as `multipart/form-data` **or** `application/x-www-form-urlencoded`
+**When** the caller `POST /login` with `username` and `password` as `multipart/form-data` **or** `application/x-www-form-urlencoded` (any extra `client_id` / `grant_type` fields are ignored, not rejected)
 **Then** the API adds `client_id`, `client_secret`, and `grant_type=password` from env and calls `POST {keycloak-base}/realms/constrsw/protocol/openid-connect/token`
-**And** the response is HTTP `201` with JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`
+**And** the response is HTTP `200` with JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`
 **And** `referesh_expires_in` is mapped from Keycloak’s `refresh_expires_in` (NFR5)
 
 **Given** the request body is missing `username` or `password`, or is not valid form-data / urlencoded

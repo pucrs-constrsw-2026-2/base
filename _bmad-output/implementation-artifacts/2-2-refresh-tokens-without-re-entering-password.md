@@ -37,7 +37,7 @@ so that I can obtain new tokens without sending my password again.
 - [ ] Task 1 — `POST /refresh` (AC: #1)
   - [ ] Path **`POST /refresh`** (SPEC CAP-7 default). Not `/auth/refresh` from Keycloak README
   - [ ] Accept multipart **or** urlencoded; field `refresh_token` only from caller
-  - [ ] Success HTTP **`200`** (distinct from login `201`)
+  - [ ] Success HTTP **`200`** (same as login)
 - [ ] Task 2 — Reuse login token client (AC: #1)
   - [ ] Same `tokenUrl`; `grant_type=refresh_token`; add client id/secret from `KeycloakSettingsService`
   - [ ] Same response mapping as login (`referesh_expires_in` when Keycloak sends `refresh_expires_in`)
@@ -61,7 +61,7 @@ so that I can obtain new tokens without sending my password again.
 | --- | --- |
 | 3.x | OA envelope (unless already shared — do not invent a second error shape) |
 | 4–6 | Users, roles, authz |
-| 2.1 | Re-litigate login 201 / JSON-vs-form |
+| 2.1 | Re-litigate login status / JSON-vs-form |
 
 ### Current files
 
@@ -78,13 +78,13 @@ Extend `keycloak-token.client.ts` with `refresh(refreshToken)`. Controller `POST
 ### Testing requirements
 
 - Assert `grant_type=refresh_token` on the outbound form body.
-- Assert success status **200** not 201.
+- Assert success status **200**.
 - Same token field set as login.
 
 ### Anti-patterns (will fail review)
 
 - Path `/auth/refresh` because Keycloak README table says so
-- Success 201 “to match login”
+- Success 201 (login is 200 too)
 - Re-asking username/password on refresh
 - Inventing `KEYCLOAK_GRANT_TYPE` env
 
@@ -144,7 +144,7 @@ Canonical contract: `_bmad-output/specs/spec-grupo07-keycloak-oauth/` (`SPEC.md`
 
 ## Previous story intelligence
 
-Story 2.1 owns login 201 + password grant + field mapping. Reuse that mapper. Epic 3 still owns OA bodies; 2.2 may keep simple 400/401.
+Story 2.1 owns login 200 + password grant + field mapping. Reuse that mapper. Epic 3 still owns OA bodies; 2.2 may keep simple 400/401.
 
 ## Latest tech information
 

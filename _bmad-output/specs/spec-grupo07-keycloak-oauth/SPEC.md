@@ -19,7 +19,7 @@ sources:
 
 - **CAP-1**
   - **intent:** A caller can exchange username/password for Keycloak tokens through the oauth API without sending client credentials.
-  - **success:** `POST /login` with form-data `username`+`password` returns `201` and JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`; invalid structure → `400`; bad credentials → `401`.
+  - **success:** `POST /login` with form-data `username`+`password` returns `200` and JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`; invalid structure → `400`; bad credentials → `401`.
 
 - **CAP-2**
   - **intent:** An authenticated caller can create, list (optionally by `enabled`), get, update, change password, and soft-delete Keycloak users via the oauth API.
@@ -53,8 +53,8 @@ sources:
 
 - Implement on the **group branch** inside submodule `backend/oauth`; add the **Dockerfile** there.
 - Realm **`constrsw`**, client **`oauth`**; email is username.
-- Login body from clients is **username + password only**; API supplies `client_id`, `client_secret`, `grant_type=password` from env.
-- Login success status is **`201`** (T1), not Keycloak’s native `200`.
+- Login body: clients send **username + password**; the API **also accepts and ignores** `client_id` / `grant_type` (which the T1 brief lists in the form) so a brief-shaped request still succeeds. `client_id`, `client_secret` and `grant_type` sent to Keycloak **always** come from env — a client-supplied value is never trusted, used, or logged.
+- Login success status is **`200`** — nothing is created, and the T1 brief leaves `Response codes` as `???` for this route (group decision 2026-09-09; see `oauth-api.md`).
 - Preserve response field spelling **`referesh_expires_in`** as in the brief.
 - Prefer Keycloak **26 URL style without `/auth`** (`…/realms/{realm}/…`); if professor base URL includes `/auth`, use that base instead.
 - Soft-delete users (and logical delete roles) — disable / mark inactive in Keycloak, do not hard-delete unless brief requires otherwise.
@@ -76,7 +76,7 @@ sources:
 
 ## Success signal
 
-Against the professor-provided Keycloak stack: login returns `201` with access and refresh tokens; user and role routes enforce Bearer auth and the OA error shape; CAP-5 authz objects are verified on imported `constrsw`/`oauth`; validate returns `200`/`403` correctly for at least one permitted and one forbidden role→resource pair; refresh yields a usable new access token; the oauth image builds and runs healthy on the provided compose.
+Against the professor-provided Keycloak stack: login returns `200` with access and refresh tokens; user and role routes enforce Bearer auth and the OA error shape; CAP-5 authz objects are verified on imported `constrsw`/`oauth`; validate returns `200`/`403` correctly for at least one permitted and one forbidden role→resource pair; refresh yields a usable new access token; the oauth image builds and runs healthy on the provided compose.
 
 ## Assumptions
 
@@ -85,6 +85,6 @@ Against the professor-provided Keycloak stack: login returns `201` with access a
 - Client secret and Admin API credentials needed for user/role CRUD are supplied via the provided `.env`.
 - CAP-5 objects ship complete in `constrsw.json` (verified 2026-09-09: 4 client roles, 8 resources + URLs, 4 role policies, 3 resource permissions, authz enabled); implementation **verifies** and gap-fills only what is genuinely absent; CAP-6 still evaluates via Authorization Services.
 - CAP-6 path/body default: `POST /authz/validate` with Bearer token and JSON `{ "resource": "<name>" }` (one of the eight resource names).
-- CAP-7 path default: `POST /refresh` with form-data `refresh_token`; success status **`200`** (distinct from login `201`).
+- CAP-7 path default: `POST /refresh` with form-data `refresh_token`; success status **`200`**, same as login.
 - Exact URL strings on the eight Keycloak resources may follow the import; otherwise use stable path-like URLs documented in `keycloak-authz.md`.
-- T1/SPEC login contract (form-data, `201`, `referesh_expires_in`) wins over illustrative JSON curls in the Keycloak README.
+- T1/SPEC login contract (form-data, `referesh_expires_in` spelling) wins over illustrative JSON curls in the Keycloak README.
