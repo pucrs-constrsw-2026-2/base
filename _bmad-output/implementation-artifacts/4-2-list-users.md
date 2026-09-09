@@ -17,8 +17,9 @@ so that I can see Keycloak users in the oauth object shape.
 ## Acceptance Criteria
 
 1. **Given** a valid Bearer token
-   **When** the caller `GET /users`
-   **Then** the API returns `200` with a list of `{ id, username, first-name, last-name, enabled }`
+   **When** the caller `GET /users` with no query string
+   **Then** the API returns `200` with a list of `{ id, username, first-name, last-name, enabled }` containing **only enabled users**
+   **And** this default follows the T1 brief, which describes the response as "todos os usuários cadastrados **e habilitados**" — pass `?enabled=false` to see disabled users
 
 2. **Given** a valid Bearer token
    **When** the caller `GET /users?enabled=true` or `?enabled=false`

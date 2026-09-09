@@ -31,7 +31,8 @@ Key points:
 - Story files: `_bmad-output/implementation-artifacts/<story-key>.md` (all ready-for-dev except 1.1 may be review/done)
 - Sprint: `_bmad-output/implementation-artifacts/sprint-status.yaml`
 - BMAD Method was used for SPEC → epics → sprint → story files. Implementation is next. Prefer implementing from existing story files; do not recreate epics/SPEC unless asked.
-- T1 rules that win over Keycloak README curls: login form-data (not JSON), success 201, field spelling referesh_expires_in, OA error envelope for failures after Epic 3.
+- T1 rules that win over Keycloak README curls: login form-data (not JSON), success 200, field spelling referesh_expires_in, OA error envelope for failures after Epic 3.
+- Login accepts extra form fields client_id/grant_type (brief lists them) but ignores them; credentials always from env.
 
 ## Team process files (must follow)
 1. CHANGELOGS.md (repo root) — after your session, APPEND a new entry at the TOP using the template in that file. No secrets.

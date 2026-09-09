@@ -64,6 +64,76 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-09 — Trilha Tokens & Autorização: login, refresh, OA errors, authz validate (stories 3.1, 2.1, 2.2, 3.2, 6.1-6.5)
+
+| Field | Value |
+| --- | --- |
+| Author | AI (Claude Code) for Leonardo Gemin |
+| Branch | oauth submodule `grupo07-feat/tokens-authz` (from `grupo07-feat/bearer-guard`, which carries stories 1.1 + Bearer guard not yet merged to `grupo07`) |
+| Stories | 3.1, 2.1, 2.2, 3.2, 6.1, 6.2, 6.3, 6.4, 6.5 (all of Trilha B / "Tokens & Autorização" per `backend/oauth/Trilhas-Grupo07.pdf`) |
+| Status | in progress → review (all 9 stories; code + tests done, live Keycloak verification still pending) |
+
+**Summary**
+- `src/errors/`: shared `{ error_code, error_description, error_source, error_stack }` envelope, `OaErrorMapper`/`OaException`, global exception filter registered in `main.ts`. `OA-xxx` local code family documented in the oauth README for Epics 4-6 to reuse.
+- `src/auth/`: `POST /login` (form-data/urlencoded, ignores brief-shaped `client_id`/`grant_type`, password grant, `200`, `referesh_expires_in` spelling preserved) and `POST /refresh` (reuses the same `KeycloakTokenClient`, `grant_type=refresh_token`). Both throw via the OA mapper directly, so 3.2's wiring was already satisfied by construction — added dedicated envelope-shape tests to prove it rather than leaving it assumed.
+- `src/authz/`: `POST /authz/validate` — Bearer-guarded, JSON `{ resource }` restricted to the eight Story 6.2 resource names, decided purely by Keycloak's UMA-ticket grant on the token endpoint (`audience=oauth`, `permission=<resource>`, caller's own access token). `200` on permit, `403` OA envelope on deny; no local role-to-resource table.
+- Stories 6.1-6.4 verified by **direct inspection of `constrsw.json`** (not a live Admin Console session — Docker is not installed in this environment): 4 client roles, 8 resources with URLs, 4 role policies (incl. `student-policy`, applied to nothing), 3 resource permissions with the exact hierarchical `applyPolicies` `keycloak-authz.md` describes. No gaps found; nothing added or edited in the professor's realm file.
+
+**Paths touched**
+- `backend/oauth/src/errors/*`, `backend/oauth/src/auth/*`, `backend/oauth/src/authz/*` — new modules
+- `backend/oauth/src/app.module.ts`, `backend/oauth/src/main.ts` — wire `AuthModule`, `AuthzModule`, global `OaExceptionFilter`
+- `backend/oauth/README.md` — login/refresh/validate contracts, OA envelope + code table, 6.1-6.4 verification record
+- `_bmad-output/implementation-artifacts/sprint-status.yaml` — epics 2/3/6 → `in-progress`; their stories → `review`
+
+**Decisions / notes for the next person**
+- Branched off `grupo07-feat/bearer-guard`, not `grupo07` directly — `grupo07`'s tip (`48b1723`) predates story 1.1 and the Bearer guard, which this track's code depends on (`KeycloakSettingsService`, `BearerAuthGuard`). Once 1.1/bearer-guard merges to `grupo07`, this branch should rebase before its own PR.
+- Used one branch for the whole track with **one commit per story** (9 commits) rather than 9 separate branches — a deliberate deviation from the PDF's "uma branch por story" for review overhead, agreed with the repo owner this session.
+- 6.1-6.4 are documented as verified against the **file** that will be imported, not a running realm — the README flags each one as still needing a live Admin Console check once someone actually runs `docker compose up` with a fresh `constrsw-keycloak-data` volume.
+- `npm test` (153 tests) and `npx tsc --noEmit` both pass on the final state of the branch.
+
+**Next suggested step**
+- Code-review this branch (fresh context), then rebase onto `grupo07` once 1.1/bearer-guard lands and open the PR.
+- Someone with Docker running should re-confirm 6.1-6.4 in the Admin Console and run at least one live `/authz/validate` call per Story 6.5 AC #6 before marking Epic 6 `done`.
+
+### 2026-09-09 — Contract review against the T1 brief (authz matrix, login contract, user listing)
+
+| Field | Value |
+| --- | --- |
+| Author | AI (Claude Code) for William Klein / Grupo 07 |
+| Branch | `base` `grupo07` |
+| Stories | 6.4, 6.5 (contract/AC correction — no implementation) |
+| Status | done |
+
+**Summary**
+- Resolved the divergence flagged in Story 6.4 Dev Notes **in favour of the professor's `constrsw.json`**, not the Moodle brief. Test oracle for 6.5 is now the hierarchical matrix.
+- Recorded the brief's original disjoint table as a historical note so the group can defend the decision if questioned.
+- Marked the multi-policy `applyPolicies` as **intentional configuration** — previously an implementer could have read them as "gaps" and deleted them from the professor's realm.
+
+**Paths touched**
+- `_bmad-output/specs/spec-grupo07-keycloak-oauth/keycloak-authz.md` — real permission bindings, new § "Divergence from the T1 brief", corrected matrix quick check
+- `_bmad-output/specs/spec-grupo07-keycloak-oauth/SPEC.md` — CAP-5, CAP-6, constraints, assumptions
+- `_bmad-output/planning-artifacts/epics.md` — FR15, FR16, NFR9, Epic 6 preamble, Story 6.4/6.5 ACs
+- `_bmad-output/implementation-artifacts/6-4-resource-based-permissions.md` — AC #1, Dev Notes, Task 4
+- `_bmad-output/implementation-artifacts/6-5-validate-...-services.md` — AC #1, AC #6, Task 3
+- `CHANGELOGS.md` — this entry
+
+**Decisions / notes for the next person**
+- **The realm is the oracle, not the brief.** Evidence: `constrsw.json` committed by the professor 2026-09-02 (`51423d2`) for this semester, alongside `10e6838` "Ajusta nome do serviço oauth" and `1791eab` the same day; the brief's screenshots still show realm `constr-sw-2022-2` / client `grupo1` (2022 re-upload).
+- Verified directly in `constrsw.json`: all three permissions are `decisionStrategy: AFFIRMATIVE`; `coordinator-permissions` applies `coordinator-policy` + `administrator-policy`; `professor-permissions` applies professor + coordinator + administrator. Effective grants: administrator → all 8; coordinator → courses, classes, lessons, reservations; professor → lessons, reservations; student → none.
+- **Do not remove those extra policies.** `SPEC.md` forbids editing the professor's realm, and doing so would be "fixing" his current config to match 2022 material.
+- Story 6.5 code is unaffected — it delegates to Keycloak Authorization Services, so it is correct under either matrix. Only test expectations changed.
+- ⚠️ **No implementation code exists yet.** Branch `grupo07` of submodule `backend/oauth` contains only `README.md` (1 file; other groups have 11–105). The 2026-09-08 entry below reports Story 1.1 as implemented and `sprint-status.yaml` still lists `1-1` as `ready-for-dev` — confirm with the author whether that Nest scaffold was ever committed before anyone redoes it.
+- Question to the professor about this divergence was drafted but **not sent** — group chose to follow the realm without waiting.
+
+**Login contract decisions (same review)**
+- **Body:** the brief's form lists `client_id` and `grant_type`; the SPEC required username+password only. Now the API **accepts and ignores** those extra fields instead of rejecting them, so a brief-shaped request still succeeds. Credentials sent to Keycloak always come from env — a client-supplied value is never trusted, used, or logged. Story 2.1 explicitly forbids `forbidNonWhitelisted` on the login DTO.
+- **Status code:** login now returns **`200`**, not `201`. The brief leaves this route's `Response codes` as literal `???`, nothing is created, and Keycloak itself answers 200. ⚠️ The earlier `201` came from group-supplied material — if Juliano has a professor source that specifies 201, this is a one-line revert in `SPEC.md` / `oauth-api.md` / story 2.1.
+- **`GET /users` default:** with no query string the list now returns **enabled users only**, matching the brief's "todos os usuários cadastrados e habilitados". `?enabled=false` shows disabled ones.
+- **Roles routes (Epic 5) kept as-is.** They are not in the T1 brief page we hold, but the brief says "no mínimo, as seguintes rotas", and they do not conflict with the professor's realm (the four client roles they manage are the ones `constrsw.json` ships). Flagged for Juliano to confirm the source.
+
+**Next suggested step**
+- Confirm the Story 1.1 code situation; fill owner names in `RESPONSIBILITIES.md`; then start Track A (1.1 → 1.2).
+
 ### 2026-09-08 — Responsibilities split (3 tracks) + AI context prompt
 
 | Field | Value |

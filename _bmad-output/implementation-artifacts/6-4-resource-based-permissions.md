@@ -18,10 +18,11 @@ so that Keycloak Authorization Services can allow or deny named resources.
 
 1. **Given** resources from Story 6.2 and policies from Story 6.3
    **When** this story is done
-   **Then** permission bindings are **verified** in the running realm (create/fix only gaps):  
+   **Then** permission bindings are **verified** in the running realm (create/fix only genuinely missing objects), each with `decisionStrategy: AFFIRMATIVE`:  
    `administrator-permissions` → `resources`, `rooms`, `professors`, `students` via `administrator-policy`;  
-   `coordinator-permissions` → `courses`, `classes` via `coordinator-policy`;  
-   `professor-permissions` → `lessons`, `reservations` via `professor-policy`
+   `coordinator-permissions` → `courses`, `classes` via `coordinator-policy` **+ `administrator-policy`**;  
+   `professor-permissions` → `lessons`, `reservations` via `professor-policy` **+ `coordinator-policy` + `administrator-policy`**
+   **And** the extra policies are treated as **intentional configuration**, not gaps — they **must not** be removed to match the brief
    **And** note: the professor export may list `*-permissions` under `policies` with an empty top-level `permissions` array — confirm **effective** bindings in Admin Console after import
    **And** configuration remains present in or applied **atop** the professor-imported realm (not a group-owned compose/realm-JSON deliverable)
    **And** the oauth README documents verification / gap-fill
@@ -33,7 +34,7 @@ so that Keycloak Authorization Services can allow or deny named resources.
   - [ ] Confirm the three named permission sets and resource lists
 - [ ] Task 2 — Gap-fill only; README
 - [ ] Task 3 — Do **not** implement `POST /authz/validate` (6.5)
-- [ ] Record extra `applyPolicies` if present (see Dev Notes) without rewriting SPEC
+- [ ] Confirm the multi-policy `applyPolicies` are present and **leave them intact** (see Dev Notes — they are intentional, not gaps)
 
 ## Dev Notes
 
@@ -45,7 +46,18 @@ so that Keycloak Authorization Services can allow or deny named resources.
 
 Import caveat: `start-dev --import-realm` runs only if realm `constrsw` is **absent** on volume `constrsw-keycloak-data`. Changing JSON without recreating the volume does nothing. Recreate volume only when the team intends a full reimport (professor Keycloak README).
 
-**Tiny inconsistency (document, do not rewrite SPEC/epics):** in `constrsw.json`, `coordinator-permissions` `applyPolicies` includes `coordinator-policy` **and** `administrator-policy`; `professor-permissions` includes professor + coordinator + administrator policies. B.2 / `keycloak-authz.md` lists a single policy per permission set. **Story 6.5 tests use the B.2 matrix as oracle** (admin → four resources, etc.). Verify **effective** console behavior. If extra policies make administrator also pass coordinator/professor resources, that is **more permissive** than the B.2 table — document actual grants; only change running config if the team must match the oracle strictly. Do not replace git `constrsw.json` as the deliverable.
+**Brief divergence — RESOLVED 2026-09-09 (group decision): the realm wins.**
+
+In `constrsw.json`, `coordinator-permissions` `applyPolicies` includes `coordinator-policy` **and** `administrator-policy`; `professor-permissions` includes professor + coordinator + administrator policies. All three permissions use `decisionStrategy: AFFIRMATIVE`, so access is **hierarchical**: `administrator` reaches all eight resources, `coordinator` reaches `courses`, `classes`, `lessons`, `reservations`, `professor` reaches `lessons`, `reservations`, `student` reaches none.
+
+Item 4 of the Moodle brief lists a single policy per permission (disjoint sets). We follow the **realm**, because it is this semester's file (committed 2026-09-02 by the professor, `51423d2`, alongside `10e6838` / `1791eab` the same day), while the brief's screenshots still show realm `constr-sw-2022-2` and client `grupo1` — 2022 material.
+
+**Therefore:**
+
+- These extra policies are **intentional**, not gaps. **Do not remove them** — that would mean editing the professor's configuration, which `SPEC.md` forbids.
+- **Story 6.5 tests use the realm-derived matrix as oracle**, not the brief's table. See `keycloak-authz.md` § "Divergence from the T1 brief", where the brief's original table is preserved as a historical note.
+- Still verify **effective** console behavior after import and record actual grants in the oauth README.
+- Do not replace git `constrsw.json` as the deliverable.
 
 **Out of scope:** Nest validate endpoint (6.5), domain APIs.
 
