@@ -48,9 +48,9 @@ FR13: Role routes return `401`/`403` for missing/unauthorized token, `404` for m
 
 FR14: Every oauth API error response uses body `{ error_code, error_description, error_source, error_stack }` with `error_source` such as `OAuthAPI`; `error_code` relays Keycloak’s code unless a brief-specific code applies; `error_stack` chains to the root cause. (CAP-4)
 
-FR15: Realm `constrsw` client `oauth` exposes the B.2 authorization model: client roles `administrator`, `coordinator`, `professor`, `student`; eight resources with URLs (`classes`, `courses`, `lessons`, `professors`, `reservations`, `resources`, `rooms`, `students`); Role policies `administrator-policy`, `coordinator-policy`, `professor-policy` bound to the matching client role (filter by client `oauth`); resource permissions `administrator-permissions` (resources, rooms, professors, students), `coordinator-permissions` (courses, classes), `professor-permissions` (lessons, reservations). Configuration is present in or applied atop the professor-imported realm. (CAP-5)
+FR15: Realm `constrsw` client `oauth` exposes the authorization model: client roles `administrator`, `coordinator`, `professor`, `student`; eight resources with URLs (`classes`, `courses`, `lessons`, `professors`, `reservations`, `resources`, `rooms`, `students`); Role policies `administrator-policy`, `coordinator-policy`, `professor-policy`, `student-policy` bound to the matching client role (filter by client `oauth`); resource permissions `administrator-permissions` (resources, rooms, professors, students), `coordinator-permissions` (courses, classes), `professor-permissions` (lessons, reservations) — each with `decisionStrategy: AFFIRMATIVE` and the **multi-policy** bindings shipped in the professor's `constrsw.json` (`coordinator-permissions` also applies `administrator-policy`; `professor-permissions` also applies `coordinator-policy` and `administrator-policy`). Those extra bindings are intentional and **must not** be removed. Configuration is verified on the professor-imported realm. (CAP-5)
 
-FR16: A caller can `POST /authz/validate` with `Authorization: Bearer {{access_token}}` and JSON `{ "resource": "<name>" }` (one of the eight resource names). The API must call **Keycloak Authorization Services** (not a local role matrix). `200` when permitted, `403` when forbidden, `401` if token missing/invalid, `400` for unknown resource name or bad structure. Outcomes must match the B.2 matrix: administrator → resources, rooms, professors, students; coordinator → courses, classes; professor → lessons, reservations; student → none. (CAP-6)
+FR16: A caller can `POST /authz/validate` with `Authorization: Bearer {{access_token}}` and JSON `{ "resource": "<name>" }` (one of the eight resource names). The API must call **Keycloak Authorization Services** (not a local role matrix). `200` when permitted, `403` when forbidden, `401` if token missing/invalid, `400` for unknown resource name or bad structure. Outcomes must match the **realm-derived** matrix (hierarchical, from the `AFFIRMATIVE` multi-policy bindings in FR15): administrator → all eight resources; coordinator → courses, classes, lessons, reservations; professor → lessons, reservations; student → none. The T1 brief's disjoint table is **not** the oracle — see `keycloak-authz.md` § "Divergence from the T1 brief". (CAP-6)
 
 FR17: A Dockerfile in `backend/oauth` builds the API image; the professor-provided root `docker-compose.yml` already defines/enables the `oauth` service — the group verifies it builds and runs against professor `.env` (does not invent compose). Runtime reads Keycloak settings from professor env var names (`KEYCLOAK_SERVER_URL`, `KEYCLOAK_REALM`, `KEYCLOAK_CLIENT_ID`, `KEYCLOAK_CLIENT_SECRET`, and related `KEYCLOAK_*` / `OAUTH_*`). (CAP-8)
 
@@ -72,7 +72,7 @@ NFR7: Soft-delete users (disable) and logically delete roles; do not hard-delete
 
 NFR8: Authz roles are **client roles** on `oauth`; filter by client when binding policies. Canonical names are `administrator`, `coordinator`, `professor`, `student`. If a future realm import diverges, stop and realign before coding policies.
 
-NFR9: CAP-6 must evaluate via Keycloak Authorization Services. The B.2 matrix is the expected-outcome oracle for tests, not a local decision engine.
+NFR9: CAP-6 must evaluate via Keycloak Authorization Services. The **realm-derived** matrix in `keycloak-authz.md` is the expected-outcome oracle for tests, not a local decision engine and not the brief's disjoint table.
 
 NFR10: Authorization resources, policies, permissions, and the validate endpoint are in MVP for this SPEC.
 
@@ -710,7 +710,9 @@ So that the user no longer holds that client role on `oauth`.
 
 B.2 client roles, eight resources, policies, and permissions exist on the imported realm; `POST /authz/validate` uses Keycloak Authorization Services (not a local matrix).
 
-**Professor import note (2026-09-03):** `constrsw.json` already includes the four `oauth` client roles, eight named resources, Authz enabled on client `oauth`, and B.2-named policies (`administrator-policy`, `coordinator-policy`, `professor-policy`, plus `*-permissions` entries in the export). Stories **6.1–6.4 are verify-first**: confirm in a running Keycloak console after volume import; **create or fix only gaps**. Do not replace professor realm JSON as a group deliverable. Story **6.5** implements the API.
+**Professor import note (2026-09-03, re-verified 2026-09-09):** `constrsw.json` already includes the four `oauth` client roles, eight named resources with URLs, Authz enabled on client `oauth`, four role policies (`administrator-policy`, `coordinator-policy`, `professor-policy`, `student-policy`) and three resource permissions. Stories **6.1–6.4 are verify-first**: confirm in a running Keycloak console after volume import; **create or fix only genuinely missing objects**. Do not replace professor realm JSON as a group deliverable. Story **6.5** implements the API.
+
+**Matrix decision (2026-09-09):** the realm's permissions apply **more than one policy each** (`AFFIRMATIVE`), so real access is hierarchical (`administrator` ⊇ `coordinator` ⊇ `professor`), unlike the disjoint table in the Moodle brief. **The realm wins** — it is this semester's file (committed 2026-09-02), while the brief's screenshots still show realm `constr-sw-2022-2` / client `grupo1`. Rationale and the brief's original table are preserved in `keycloak-authz.md` § "Divergence from the T1 brief".
 
 **FRs covered:** FR15, FR16  
 **NFRs:** NFR8, NFR9, NFR10, NFR11
@@ -779,10 +781,11 @@ So that Keycloak Authorization Services can allow or deny named resources.
 
 **Given** resources from Story 6.2 and policies from Story 6.3
 **When** this story is done
-**Then** permission bindings are **verified** in the running realm (create/fix only gaps):  
+**Then** permission bindings are **verified** in the running realm (create/fix only genuinely missing objects), each with `decisionStrategy: AFFIRMATIVE`:  
 `administrator-permissions` → `resources`, `rooms`, `professors`, `students` via `administrator-policy`;  
-`coordinator-permissions` → `courses`, `classes` via `coordinator-policy`;  
-`professor-permissions` → `lessons`, `reservations` via `professor-policy`
+`coordinator-permissions` → `courses`, `classes` via `coordinator-policy` **+ `administrator-policy`**;  
+`professor-permissions` → `lessons`, `reservations` via `professor-policy` **+ `coordinator-policy` + `administrator-policy`**
+**And** those extra policies are recorded as **intentional** (professor's realm wins over the brief — see `keycloak-authz.md` § "Divergence from the T1 brief"); they **must not** be removed to match the brief
 **And** note: the professor export may list `*-permissions` under `policies` with an empty top-level `permissions` array — confirm effective bindings in Admin Console after import
 **And** configuration remains present in or applied **atop** the professor-imported realm (not a group-owned compose/realm-JSON deliverable)
 **And** the oauth README documents verification / gap-fill
@@ -817,7 +820,8 @@ So that I learn whether that token is permitted — decided by Keycloak, not a l
 **When** the caller `POST /authz/validate`
 **Then** the API returns `400` with the OA envelope (`error_code` e.g. `OA-400` if not relaying Keycloak)
 
-**Given** the B.2 matrix
+**Given** the realm-derived matrix in `keycloak-authz.md`
 **When** tests run against professor Keycloak
 **Then** at least one permitted pair returns `200` and at least one forbidden pair returns `403`
-**And** outcomes match: administrator → `resources`, `rooms`, `professors`, `students`; coordinator → `courses`, `classes`; professor → `lessons`, `reservations`; student → **none**
+**And** outcomes match the **hierarchical** grants: administrator → **all eight** resources; coordinator → `courses`, `classes`, `lessons`, `reservations`; professor → `lessons`, `reservations`; student → **none**
+**And** no test asserts a `403` for administrator or coordinator on a resource the realm actually grants (the brief's disjoint table is not the oracle)

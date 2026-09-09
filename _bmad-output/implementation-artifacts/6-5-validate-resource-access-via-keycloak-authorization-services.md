@@ -20,7 +20,7 @@ so that I learn whether that token is permitted — decided by Keycloak, not a l
    **When** the caller `POST /authz/validate` with `Authorization: Bearer {{access_token}}`
    **Then** the API calls **Keycloak Authorization Services** (token/permission evaluation against configured resources/policies)
    **And** Keycloak Authorization Services is the **decision engine**
-   **And** the B.2 matrix is the **test oracle only** — not a local allow/deny implementation
+   **And** the realm-derived matrix in `keycloak-authz.md` is the **test oracle only** — not a local allow/deny implementation
 
 2. **Given** Keycloak permits access
    **When** validate runs
@@ -38,10 +38,15 @@ so that I learn whether that token is permitted — decided by Keycloak, not a l
    **When** the caller `POST /authz/validate`
    **Then** the API returns `400` with the OA envelope (`error_code` e.g. `OA-400` if not relaying Keycloak)
 
-6. **Given** the B.2 matrix
+6. **Given** the realm-derived matrix in `keycloak-authz.md`
    **When** tests run against professor Keycloak
    **Then** at least one permitted pair returns `200` and at least one forbidden pair returns `403`
-   **And** outcomes match: administrator → `resources`, `rooms`, `professors`, `students`; coordinator → `courses`, `classes`; professor → `lessons`, `reservations`; student → **none**
+   **And** outcomes match the **hierarchical** grants (`AFFIRMATIVE` multi-policy bindings — see Story 6.4):
+   administrator → **all eight** resources;
+   coordinator → `courses`, `classes`, `lessons`, `reservations`;
+   professor → `lessons`, `reservations`;
+   student → **none**
+   **And** no test asserts `403` for administrator or coordinator on a resource the realm actually grants — the Moodle brief's disjoint table is **not** the oracle (group decision 2026-09-09)
 
 ## Tasks / Subtasks
 
@@ -53,8 +58,10 @@ so that I learn whether that token is permitted — decided by Keycloak, not a l
 - [ ] Task 2 — Map KC permit/deny → `200` / `403` OA (AC: #2, #3)
 - [ ] Task 3 — Tests (AC: #6)
   - [ ] Unit tests mock KC decision endpoint (prove no local matrix)
-  - [ ] At least one live or documented lab check: permitted `200` + forbidden `403` matching B.2
-  - [ ] Student → none (403 on any of the eight)
+  - [ ] At least one live or documented lab check: permitted `200` + forbidden `403` matching the realm-derived matrix
+  - [ ] Student → none (403 on any of the eight) — the one row where brief and realm agree
+  - [ ] Safe forbidden pairs to assert: `student` → any resource; `professor` → `professors`/`rooms`/`resources`/`students`/`courses`/`classes`
+  - [ ] Do **not** assert `administrator` → `403` on anything (realm grants all eight)
 - [ ] Task 4 — README: path, body, eight names, “decision engine = Keycloak”
 - [ ] Do not edit realm JSON as the implementation of allow/deny
 

@@ -56,7 +56,30 @@ One **Role** policy per role, filtering by client `oauth` when selecting the rol
 
 ### Resource-based permissions
 
-| Permission | Resources | Policy |
+**Source of truth: the professor's `constrsw.json`** (see "Divergence from the T1 brief" below).
+All three permissions use `decisionStrategy: AFFIRMATIVE` — **any** applied policy granting is enough.
+
+| Permission | Resources | Applied policies |
+| --- | --- | --- |
+| `administrator-permissions` | `resources`, `rooms`, `professors`, `students` | `administrator-policy` |
+| `coordinator-permissions` | `courses`, `classes` | `coordinator-policy`, `administrator-policy` |
+| `professor-permissions` | `lessons`, `reservations` | `professor-policy`, `coordinator-policy`, `administrator-policy` |
+
+`student-policy` exists in the realm but is **not** applied to any permission.
+
+### Divergence from the T1 brief (group decision, 2026-09-09)
+
+Item 4 of the Moodle brief lists **one** policy per permission (`coordinator-permissions` → `coordinator-policy` only, `professor-permissions` → `professor-policy` only). The professor's imported realm applies **several**, producing hierarchical access instead of disjoint sets.
+
+**We follow the realm, not the brief.** Rationale:
+
+- `constrsw.json` was committed by the professor on **2026-09-02** (`51423d2`) for **this** semester, and the surrounding commits (`10e6838`, `1791eab`) show the stack was actively being adjusted that same day.
+- The brief's screenshots show realm `constr-sw-2022-2` and client `grupo1` — material re-uploaded from 2022, superseded by the current `constrsw` / `oauth` realm.
+- `SPEC.md` already forbids owning or rewriting the professor's realm JSON; matching the brief would mean **editing his configuration**.
+
+**Consequence for implementers:** the multi-policy bindings are **intentional, not gaps**. Do **not** remove `administrator-policy` / `coordinator-policy` from the permissions to make the realm match the brief. The brief's table is kept below as a historical note only.
+
+| Brief's table (historical — NOT the oracle) | Resources | Policy |
 | --- | --- | --- |
 | `administrator-permissions` | `resources`, `rooms`, `professors`, `students` | `administrator-policy` |
 | `coordinator-permissions` | `courses`, `classes` | `coordinator-policy` |
@@ -79,14 +102,20 @@ Provisional contract (brief specified behavior, not path):
 
 **Must** call **Keycloak Authorization Services** (e.g. token/permission evaluation against the configured resources/policies). Do **not** decide allow/deny by reading roles locally. The matrix below is the expected-outcome oracle for tests. Errors use the oauth OA error body (`oauth-api.md`).
 
-### Matrix quick check
+### Matrix quick check (test oracle)
+
+Derived from the realm's actual bindings + `AFFIRMATIVE` strategy. **This is the oracle for Story 6.5 tests.**
 
 | Role | Allowed resources |
 | --- | --- |
-| `administrator` | `resources`, `rooms`, `professors`, `students` |
-| `coordinator` | `courses`, `classes` |
+| `administrator` | **all eight** — `resources`, `rooms`, `professors`, `students`, `courses`, `classes`, `lessons`, `reservations` |
+| `coordinator` | `courses`, `classes`, `lessons`, `reservations` |
 | `professor` | `lessons`, `reservations` |
-| `student` | *(none in B.2 permission sets)* |
+| `student` | *(none — `student-policy` is applied to no permission)* |
+
+Access is **hierarchical**: `administrator` ⊇ `coordinator` ⊇ `professor`.
+
+> The T1 brief implies disjoint sets (administrator → four resources only). That table is **not** the oracle — see "Divergence from the T1 brief" above. `student → none` is the one row where brief and realm agree.
 
 ## OIDC reference routes
 

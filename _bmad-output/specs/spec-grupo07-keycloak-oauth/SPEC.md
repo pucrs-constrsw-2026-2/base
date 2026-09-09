@@ -35,11 +35,11 @@ sources:
 
 - **CAP-5**
   - **intent:** Realm `constrsw` client `oauth` exposes the B.2 authorization model (roles, resources, role policies, resource permissions).
-  - **success:** Client roles `administrator`, `coordinator`, `professor`, `student`; eight resources with URLs; B.2 policies/permissions present — **verified on the professor-imported realm** (`constrsw.json`) with gap-fill only; not a group-owned compose/realm-JSON deliverable.
+  - **success:** Client roles `administrator`, `coordinator`, `professor`, `student`; eight resources with URLs; policies/permissions present — **verified on the professor-imported realm** (`constrsw.json`) with gap-fill only; not a group-owned compose/realm-JSON deliverable. The realm's **multi-policy** permission bindings are authoritative over the brief's single-policy table (group decision 2026-09-09, see `keycloak-authz.md`); they are **not** gaps to "correct".
 
 - **CAP-6**
   - **intent:** A caller can ask whether an access token grants access to a named authorization resource.
-  - **success:** Validate endpoint calls **Keycloak Authorization Services** (not a local role matrix) and returns `200` when permitted and `403` when forbidden (`401` if token missing/invalid); outcomes must match the CAP-5 / B.2 matrix in `keycloak-authz.md`.
+  - **success:** Validate endpoint calls **Keycloak Authorization Services** (not a local role matrix) and returns `200` when permitted and `403` when forbidden (`401` if token missing/invalid); outcomes must match the **realm-derived** matrix in `keycloak-authz.md` (hierarchical: `administrator` ⊇ `coordinator` ⊇ `professor`; `student` → none), not the brief's disjoint table.
 
 - **CAP-7**
   - **intent:** A caller can obtain new tokens from a valid `refresh_token` without re-entering password.
@@ -59,8 +59,9 @@ sources:
 - Prefer Keycloak **26 URL style without `/auth`** (`…/realms/{realm}/…`); if professor base URL includes `/auth`, use that base instead.
 - Soft-delete users (and logical delete roles) — disable / mark inactive in Keycloak, do not hard-delete unless brief requires otherwise.
 - Authz roles are **client roles** on `oauth` (filter by client when binding policies).
-- Canonical role names for the permission matrix: **`administrator`**, **`coordinator`**, **`professor`**, **`student`** (B.2). Confirmed to match the intended realm; if a future import diverges, stop and realign before coding policies.
-- CAP-6 **must** evaluate via **Keycloak Authorization Services**; the B.2 matrix is the expected-outcome oracle, not a local decision engine.
+- Canonical role names for the permission matrix: **`administrator`**, **`coordinator`**, **`professor`**, **`student`**. Confirmed to match the imported realm; if a future import diverges on **role names**, stop and realign before coding policies.
+- CAP-6 **must** evaluate via **Keycloak Authorization Services**; the **realm-derived** matrix in `keycloak-authz.md` is the expected-outcome oracle, not a local decision engine and not the brief's table.
+- Where the professor's `constrsw.json` and the Moodle brief disagree, **the realm wins** (group decision 2026-09-09, rationale in `keycloak-authz.md`). Never edit the professor's realm to make it match the brief.
 - `.env` and `docker-compose.yml` are **professor-provided**; plug in — do not treat inventing compose as a deliverable.
 - Authorization resources/policies/permissions and the validate endpoint are **in MVP** for this SPEC.
 
@@ -82,7 +83,7 @@ Against the professor-provided Keycloak stack: login returns `201` with access a
 - Professor compose is on `main`: Keycloak **26.0.1** via `infrastructure/dev.local/services/keycloak`, realm import `constrsw.json`, external volume `constrsw-keycloak-data`, console `:8081`, oauth API `:8181`.
 - Keycloak public/internal API base omits `/auth` (`KEYCLOAK_SERVER_URL=http://keycloak:8080`) — **verified against professor `.env`**.
 - Client secret and Admin API credentials needed for user/role CRUD are supplied via the provided `.env`.
-- CAP-5 objects largely ship in `constrsw.json`; implementation **verifies** then gap-fills; CAP-6 still evaluates via Authorization Services.
+- CAP-5 objects ship complete in `constrsw.json` (verified 2026-09-09: 4 client roles, 8 resources + URLs, 4 role policies, 3 resource permissions, authz enabled); implementation **verifies** and gap-fills only what is genuinely absent; CAP-6 still evaluates via Authorization Services.
 - CAP-6 path/body default: `POST /authz/validate` with Bearer token and JSON `{ "resource": "<name>" }` (one of the eight resource names).
 - CAP-7 path default: `POST /refresh` with form-data `refresh_token`; success status **`200`** (distinct from login `201`).
 - Exact URL strings on the eight Keycloak resources may follow the import; otherwise use stable path-like URLs documented in `keycloak-authz.md`.
