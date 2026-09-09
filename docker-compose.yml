@@ -1,74 +1,87 @@
-# ConstrSW 2026/2 - Grupo 04 (students)
-# Avaliacao Pratica T1 - sobe o Keycloak (com o realm "constrsw" e o client "oauth"
-# ja importados a partir do backup) e a API "oauth" que consome a REST API do Keycloak.
-#
-# Uso:
-#   docker compose up --build
-#
-# Keycloak:      http://localhost:8080  (admin console: usuario/senha em .env)
-# oauth API:     http://localhost:9000
-# Swagger UI:    http://localhost:9000/swagger-ui.html
+# Builds: cada serviço com `build:` compila/embalagem apenas no Dockerfile (não usar artefatos de build da máquina host no lugar do build da imagem). Ver README.md na raiz.
+networks:
+  constrsw:
+
+volumes:
+  # No terminal, criar o volume externo: docker volume create constrsw-keycloak-data
+  constrsw-keycloak-data:
+    external: true
 
 services:
+
+  # Keycloak
   keycloak:
-    image: quay.io/keycloak/keycloak:26.7.2
-    container_name: constrsw-keycloak
-    command: ["start-dev", "--import-realm"]
+    container_name: keycloak
+    build:
+      context: ./infrastructure/dev.local/services/keycloak
+      dockerfile: Dockerfile
+    image: constrsw/keycloak
     environment:
-      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN_USER}
-      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      KC_BOOTSTRAP_ADMIN_USERNAME: ${KEYCLOAK_ADMIN_USER}
-      KC_BOOTSTRAP_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD}
-      # Fixa o hostname interno para que o "iss" (issuer) dos tokens emitidos seja
-      # sempre http://keycloak:8080/realms/constrsw, independente de quem chamou
-      # (Postman via localhost:8080 ou o container "oauth" via rede interna do
-      # Docker) - e o que a API "oauth" usa para validar o Bearer token (JWKS).
-      KC_HOSTNAME: keycloak
-      KC_HOSTNAME_STRICT: "false"
-      KC_HOSTNAME_STRICT_HTTPS: "false"
-      KC_HTTP_ENABLED: "true"
-      KC_HEALTH_ENABLED: "true"
-    ports:
-      - "8080:8080"
+      - KC_HEALTH_ENABLED=${KC_HEALTH_ENABLED}
+      - KC_METRICS_ENABLED=${KC_METRICS_ENABLED}
+      - KC_HTTP_MANAGEMENT_PORT=${KC_HTTP_MANAGEMENT_PORT}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
     volumes:
-      - ./backend/oauth/keycloak/realm-export.json:/opt/keycloak/data/import/realm-export.json:ro
+      # No terminal, criar o volume externo: docker volume create constrsw-keycloak-data
+      - constrsw-keycloak-data:/opt/keycloak/data
+      - ./infrastructure/dev.local/services/keycloak:/opt/keycloak/data/import
     networks:
       - constrsw
+    ports:
+      - ${KEYCLOAK_EXTERNAL_CONSOLE_PORT}:${KEYCLOAK_INTERNAL_CONSOLE_PORT}
+      - ${KEYCLOAK_EXTERNAL_METRICS_PORT}:${KEYCLOAK_INTERNAL_METRICS_PORT}
+    command: start-dev --import-realm
+    restart: always
     healthcheck:
-      # A imagem do Keycloak (ubi9-micro) nao tem curl/wget; abrimos um socket TCP
-      # cru (recurso do bash) para a porta de management (9000, interna ao
-      # container) e conferimos o "200" na resposta HTTP do /health/ready.
       test:
-        - CMD-SHELL
-        - "exec 3<>/dev/tcp/127.0.0.1/9000 && echo -e 'GET /health/ready HTTP/1.1\r\nhost: localhost\r\nConnection: close\r\n\r\n' >&3 && grep -Eq '\"status\"[[:space:]]*:[[:space:]]*\"UP\"' <&3"
-      interval: 5s
-      timeout: 5s
-      retries: 30
-      start_period: 15s
+        [
+          "CMD-SHELL",
+          "curl -f ${KEYCLOAK_INTERNAL_HOST}:${KEYCLOAK_INTERNAL_METRICS_PORT}/health",
+        ]
+      start_period: 0s
+      interval: 20s
+      timeout: 10s
+      retries: 20
 
-  # Descomentado para a etapa "Configuracao + Login" do Grupo 04 (students).
-  # So sobe depois que o healthcheck acima confirmar que o Keycloak esta pronto
-  # (realm importado e endpoint de token respondendo) - evita o 503 de
-  # "Keycloak indisponivel" que a API "oauth" reporta quando tenta logar antes
-  # da hora.
+  # Auth - Keycloak Gateway API
   oauth:
+    container_name: oauth
     build:
       context: ./backend/oauth
       dockerfile: Dockerfile
-    container_name: constrsw-oauth
+    image: constrsw/oauth
+    environment:
+      - KEYCLOAK_SERVER_URL=${KEYCLOAK_SERVER_URL}
+      - KEYCLOAK_REALM=${KEYCLOAK_REALM}
+      - KEYCLOAK_CLIENT_ID=${KEYCLOAK_CLIENT_ID}
+      - KEYCLOAK_CLIENT_SECRET=${KEYCLOAK_CLIENT_SECRET}
+      - KEYCLOAK_ADMIN=${KEYCLOAK_ADMIN}
+      - KEYCLOAK_ADMIN_PASSWORD=${KEYCLOAK_ADMIN_PASSWORD}
+      - OAUTH_INTERNAL_PROTOCOL=${OAUTH_INTERNAL_PROTOCOL}
+      - OAUTH_INTERNAL_HOST=${OAUTH_INTERNAL_HOST}
+      - OAUTH_INTERNAL_API_PORT=${OAUTH_INTERNAL_API_PORT}
+      - OAUTH_INTERNAL_DEBUG_PORT=${OAUTH_INTERNAL_DEBUG_PORT}
+      - OAUTH_INTERNAL_METRICS_PORT=${OAUTH_INTERNAL_METRICS_PORT}
+    ports:
+      - "${OAUTH_EXTERNAL_API_PORT}:${OAUTH_INTERNAL_API_PORT}"
+      - "${OAUTH_EXTERNAL_DEBUG_PORT}:${OAUTH_INTERNAL_DEBUG_PORT}"
+      - "${OAUTH_EXTERNAL_METRICS_PORT}:${OAUTH_INTERNAL_METRICS_PORT}"
+    networks:
+      - constrsw
     depends_on:
       keycloak:
         condition: service_healthy
-    environment:
-      KEYCLOAK_URL: http://keycloak:8080
-      KEYCLOAK_REALM: ${KEYCLOAK_REALM}
-      KEYCLOAK_CLIENT_ID: ${KEYCLOAK_CLIENT_ID}
-      KEYCLOAK_CLIENT_SECRET: ${KEYCLOAK_CLIENT_SECRET}
-    ports:
-      - "9000:8080"
-    networks:
-      - constrsw
-
-networks:
-  constrsw:
-    driver: bridge
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "curl",
+          "-f",
+          "http://127.0.0.1:${OAUTH_INTERNAL_API_PORT}/actuator/health",
+        ]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+    restart: always
