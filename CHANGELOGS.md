@@ -64,6 +64,42 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-09 — Story 1.1 + Bearer guard (Trilha Usuários) and a collision warning for `src/errors/`
+
+| Field | Value |
+| --- | --- |
+| Author | William Klein |
+| Branch | `oauth` `grupo07-feat/keycloak-config` (PR #6) and `grupo07-feat/bearer-guard` (PR #7), both merged |
+| Stories | 1.1 → review; 4.1 task 1 (Bearer guard) → 4.1 in-progress |
+| Status | merged |
+
+**Summary**
+- Story **1.1**: NestJS 11 scaffold, typed config bound to the professor env names, and the Keycloak URL builder (`tokenUrl`, `userInfoUrl`, `adminRealmUrl`, `realmPath()`, `adminPath()`). 29 tests.
+- **Bearer guard**: task 1 of story 4.1, delivered ahead of the rest of Epic 4 so the roles and authz tracks would not wait on it. 28 tests.
+- `sprint-status.yaml`: `1-1` → `review`; `epic-4` and `4-1` → `in-progress`.
+
+**Paths touched**
+- `backend/oauth/src/config/` — env binding with fail-fast, URL builder
+- `backend/oauth/src/common/` — `bearer-auth.guard.ts`, `keycloak-token-verifier.service.ts`
+- `backend/oauth/README.md` — environment contract, URL rule, authentication section
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, `CHANGELOGS.md`
+
+**Decisions / notes for the next person**
+
+- ⚠️ **`src/errors/` has two implementations and will conflict.** `grupo07` already carries the roles track's `oa-exception.filter.ts` and `errors/index.ts`, while branch `grupo07-feat/tokens-authz` carries the story 3.1 version — a fuller one with `oa-error.mapper.ts` and `oa-error.ts`. Reconcile **before** merging the tokens branch, keeping the story 3.1 implementation as the contract one and making the roles routes work against it. Nobody's fault: the merge block meant all three tracks ran in parallel without integrating.
+- **Do not read `process.env` in feature modules.** Inject `KeycloakSettingsService`; the `/auth` rule lives there and must not be duplicated. `adminUser` / `adminPassword` getters were added by the roles track and are the right place for them.
+- **`BearerAuthGuard` never decides permissions.** A caller with a valid token and no roles passes it — a test pins this. It answers *who is calling*; `403` is the route's business. The roles track added a separate `AdministratorRoleGuard` for its own routes, which story 4.1 permits ("missing required client role"); note that holding the `administrator` client role is not the same as holding Keycloak Admin API rights, so the two can disagree.
+- Guard verification uses **UserInfo**, not local JWT signature checking, so logout and disabled accounts take effect immediately. Bounded by a 5s timeout — Node's `fetch` has none by default and a hung Keycloak would otherwise hold every request open.
+- An unreachable Keycloak answers **503**, not 401: a valid token must not be blamed for our outage.
+- The guard throws standard Nest exceptions, so whichever OA exception filter wins the reconciliation above formats them with **no change to the guard**.
+- **No live Keycloak call has been made from this track yet.** Story 1.1 forbids it, and Docker was not running here; the roles track's story 1.3 covers that proof.
+- 📌 **`RESPONSIBILITIES.md` is out of date** — it still lists the original track split with no owners. The tracks are now: Usuários (William), Roles (Gabriel), Tokens & Autorização (Leonardo), with Juliano's part being the planning already delivered.
+
+**Next suggested step**
+- Reconcile `src/errors/` before the tokens branch merges.
+- Continue Epic 4 (`POST /users` and the rest), reusing the Admin API client the roles track already wrote instead of adding a second one.
+
+
 ### 2026-09-09 — Restrict Roles operations to administrator
 
 | Field | Value |
