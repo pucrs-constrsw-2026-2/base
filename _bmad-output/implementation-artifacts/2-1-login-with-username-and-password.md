@@ -17,9 +17,10 @@ so that I receive Keycloak tokens without sending client credentials.
 ## Acceptance Criteria
 
 1. **Given** valid credentials for a user in realm `constrsw`
-   **When** the caller `POST /login` with `username` and `password` only (no `client_id` / `client_secret` / `grant_type`) as `multipart/form-data` **or** `application/x-www-form-urlencoded`
+   **When** the caller `POST /login` with `username` and `password` as `multipart/form-data` **or** `application/x-www-form-urlencoded`
    **Then** the API adds `client_id`, `client_secret`, and `grant_type=password` from env and calls `POST {keycloak-base}/realms/constrsw/protocol/openid-connect/token`
-   **And** the response is HTTP `201` with JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`
+   **And** the response is HTTP `200` with JSON `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`
+   **And** if the caller also sends `client_id` or `grant_type` (the T1 brief lists them in the form), those fields are **ignored** — the request still succeeds and the client value is never used
    **And** `referesh_expires_in` is mapped from Keycloak’s `refresh_expires_in` (NFR5)
 
 2. **Given** the request body is missing `username` or `password`, or is not valid form-data / urlencoded
@@ -37,10 +38,11 @@ so that I receive Keycloak tokens without sending client credentials.
 - [ ] Task 1 — `POST /login` controller (AC: #1)
   - [ ] Accept **both** `multipart/form-data` and `application/x-www-form-urlencoded` (epics.md). JSON body is **out of contract** (Keycloak README JSON curl is wrong for T1)
   - [ ] Read only `username` and `password`. Ignore/do not require client fields from the caller
-  - [ ] Success HTTP **`201`** (NFR6), not Keycloak’s `200`
+  - [ ] Success HTTP **`200`** (NFR6)
+  - [ ] Do **not** use `forbidNonWhitelisted` on the login DTO — extra brief-listed fields must be stripped, not rejected with `400`
 - [ ] Task 2 — Keycloak password grant (AC: #1)
   - [ ] POST to `KeycloakSettingsService.urls.tokenUrl` as `application/x-www-form-urlencoded`
-  - [ ] Server adds `client_id`, `client_secret` from settings, `grant_type=password`
+  - [ ] Server adds `client_id`, `client_secret` from settings, `grant_type=password` — always from env, never from the request body; never log a client-supplied secret
   - [ ] Do not insert `/auth` (already handled by URL builder)
 - [ ] Task 3 — Token JSON mapping (AC: #1)
   - [ ] Return `token_type`, `access_token`, `expires_in`, `refresh_token`, `referesh_expires_in`
@@ -51,8 +53,9 @@ so that I receive Keycloak tokens without sending client credentials.
   - [ ] Leave `{ error_code, error_description, error_source, error_stack }` to Epic 3
 - [ ] Task 5 — Tests + README
   - [ ] Unit/HTTP tests with **mocked** Keycloak token endpoint (no live KC required)
-  - [ ] Cases: urlencoded success 201 + typo field; multipart success; missing field 400; KC 401 → 401
-  - [ ] README: `POST /login` contract (form only, 201, field list)
+  - [ ] Cases: urlencoded success 200 + typo field; multipart success; missing field 400; KC 401 → 401
+  - [ ] Case: body shaped like the T1 brief (`client_id` + `grant_type` present) still returns 200, and the env `client_id` is what reaches Keycloak
+  - [ ] README: `POST /login` contract (form only, 200, field list, extra fields ignored)
   - [ ] Do not commit professor passwords; tests use fixtures
 
 ## Dev Notes
@@ -160,7 +163,7 @@ Canonical contract: `_bmad-output/specs/spec-grupo07-keycloak-oauth/` (`SPEC.md`
 ### References
 
 - [Source: `epics.md` — Story 2.1, FR1, FR2, NFR4, NFR5, NFR6]
-- [Source: `SPEC.md` — CAP-1, Constraints (201, referesh_expires_in, username+password only)]
+- [Source: `SPEC.md` — CAP-1, Constraints (200, referesh_expires_in, extra form fields ignored)]
 - [Source: `oauth-api.md` — CAP-1 Login table]
 - [Source: Story 1.1 — `tokenUrl`]
 

@@ -63,7 +63,7 @@
 # - Story 1.3 verifies oauth against professor compose (service already present)
 
 generated: 2026-09-03
-last_updated: 2026-09-08
+last_updated: 2026-09-09
 project: constrsw-2026-2
 project_key: NOKEY
 tracking_system: file-system
@@ -79,15 +79,15 @@ development_status:
   epic-1-retrospective: optional
 
   # Epic 2: Sign in and renew access (FR1, FR2, FR3)
-  epic-2: backlog
-  2-1-login-with-username-and-password: ready-for-dev
-  2-2-refresh-tokens-without-re-entering-password: ready-for-dev
+  epic-2: in-progress
+  2-1-login-with-username-and-password: review
+  2-2-refresh-tokens-without-re-entering-password: review
   epic-2-retrospective: optional
 
   # Epic 3: Surface uniform oauth error diagnostics (FR14)
-  epic-3: backlog
-  3-1-oa-error-envelope-and-mapper: ready-for-dev
-  3-2-oa-error-body-on-login-and-refresh-failures: ready-for-dev
+  epic-3: in-progress
+  3-1-oa-error-envelope-and-mapper: review
+  3-2-oa-error-body-on-login-and-refresh-failures: review
   epic-3-retrospective: optional
 
   # Epic 4: Administer Keycloak users (FR4–FR10)
@@ -113,10 +113,13 @@ development_status:
   epic-5-retrospective: optional
 
   # Epic 6: Authorize and validate resource access (FR15, FR16)
-  epic-6: backlog
-  6-1-ensure-b-2-client-roles-on-oauth: ready-for-dev
-  6-2-authorization-resources-with-urls: ready-for-dev
-  6-3-role-policies-on-client-oauth: ready-for-dev
-  6-4-resource-based-permissions: ready-for-dev
-  6-5-validate-resource-access-via-keycloak-authorization-services: ready-for-dev
+  # 6.1-6.4 verified by static inspection of constrsw.json (no Docker in this
+  # environment); live Admin Console re-confirmation after volume import is
+  # still recommended before promoting to done — see backend/oauth README.
+  epic-6: in-progress
+  6-1-ensure-b-2-client-roles-on-oauth: review
+  6-2-authorization-resources-with-urls: review
+  6-3-role-policies-on-client-oauth: review
+  6-4-resource-based-permissions: review
+  6-5-validate-resource-access-via-keycloak-authorization-services: review
   epic-6-retrospective: optional
