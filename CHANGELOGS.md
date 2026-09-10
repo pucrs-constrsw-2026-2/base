@@ -64,6 +64,45 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-10 — Epic 4 (`/users`) + shared Admin client; all six epics now have code
+
+| Field | Value |
+| --- | --- |
+| Author | William Klein |
+| Branch | `oauth` `grupo07-feat/keycloak-admin-client` (PR #11) and `grupo07-feat/users-api` (PR #12), both merged |
+| Stories | 4.1–4.6 → review |
+| Status | merged |
+
+**Summary**
+- **Extracted `KeycloakAdminClient`** from the roles module so users and roles share one Admin API implementation (agreed with the roles track first). The roles service dropped from 258 to 188 lines with no behaviour change.
+- **The admin token is now cached** until shortly before the expiry Keycloak reports, and concurrent callers collapse onto a single authentication. Previously a token was fetched on *every* Admin API call — one `GET /roles` opened four upstream requests where two suffice.
+- **Implemented the six `/users` routes** (stories 4.1–4.6) on top of that client.
+
+**Paths touched**
+- `backend/oauth/src/common/keycloak-admin.client.ts` — shared Admin API client (new)
+- `backend/oauth/src/roles/keycloak-admin.service.ts` — now client-role logic only
+- `backend/oauth/src/users/` — controller, service, types, exceptions (new)
+- `backend/oauth/src/app.integration.spec.ts` — users coverage + route-shadowing guard
+- `backend/oauth/README.md` — users section
+- `_bmad-output/implementation-artifacts/sprint-status.yaml`, `CHANGELOGS.md`
+
+**Decisions / notes for the next person**
+
+- ⚠️ **Nothing has been exercised against a running Keycloak.** Docker never came up during this work, so all 253 tests are against a faked upstream. They prove the logic and the contracts, not the wiring. **Story 1.3 is the end-to-end proof and still needs a real `docker compose up` before delivery** — someone must actually walk the routes.
+- **Do not add a second Admin API client.** Inject `KeycloakAdminClient` — it owns the admin token, the timeout and the failure mapping. Adding another would let the two drift.
+- The client caches its token, so **integration tests must call `invalidateToken()` between cases**, otherwise a token cached by an earlier test leaks into the next one and changes which failure path runs.
+- **`username` is the account identity.** The realm uses e-mail as username, so `PUT /users/:id` rejects it along with any other unsupported field. Password changes go through `PATCH`.
+- Keycloak's user update **replaces the whole representation**, so the service reads the stored user and merges onto it. Writing only the changed fields would clear the others.
+- `DELETE /users/:id` disables and never removes, and answers `204` even when the user was already disabled.
+- `GET /users` with no query string returns **enabled users only**, per the brief. The filter is reapplied locally because some Keycloak setups ignore the query parameter.
+- Users routes require the `administrator` client role, same as roles. Since the service authenticates as `KEYCLOAK_ADMIN`, Keycloak would never answer `403` by itself — that check is what makes the "known caller, not permitted" case reachable.
+- Two roles tests fed `fetch` positionally; one of them was passing for the wrong reason (it failed on the admin token, not on the response it claimed to test). Both now route by URL.
+
+**Next suggested step**
+- **Run the stack for real** (`docker volume create constrsw-keycloak-data`, then `docker compose up`) and walk every route against the professor's Keycloak. That is story 1.3 and it is the last gap before delivery.
+- Update `RESPONSIBILITIES.md`, still describing the original track split.
+
+
 ### 2026-09-09 — Story 1.1 + Bearer guard (Trilha Usuários) and a collision warning for `src/errors/`
 
 | Field | Value |

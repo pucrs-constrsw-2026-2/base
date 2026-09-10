@@ -1,5 +1,5 @@
 # generated: 2026-09-03
-# last_updated: 2026-09-09
+# last_updated: 2026-09-10
 # story 1.1 created → epic-1 in-progress, 1-1 ready-for-dev (story file only; no app code)
 # 2026-09-08 batch create-story: remaining 25 stories → ready-for-dev (files only).
 #   epic-1 stays in-progress; epics 2–6 stay backlog until implementation starts.
@@ -63,7 +63,7 @@
 # - Story 1.3 verifies oauth against professor compose (service already present)
 
 generated: 2026-09-03
-last_updated: 2026-09-09
+last_updated: 2026-09-10
 project: constrsw-2026-2
 project_key: NOKEY
 tracking_system: file-system
@@ -91,15 +91,13 @@ development_status:
   epic-3-retrospective: optional
 
   # Epic 4: Administer Keycloak users (FR4–FR10)
-  # Bearer guard (task 1 of 4.1) landed early so the roles and authz tracks
-  # would not wait on Epic 4; the rest of 4.1 is still open.
   epic-4: in-progress
-  4-1-create-user: in-progress
-  4-2-list-users: ready-for-dev
-  4-3-get-user-by-id: ready-for-dev
-  4-4-update-user-attributes: ready-for-dev
-  4-5-change-user-password: ready-for-dev
-  4-6-soft-delete-user: ready-for-dev
+  4-1-create-user: review
+  4-2-list-users: review
+  4-3-get-user-by-id: review
+  4-4-update-user-attributes: review
+  4-5-change-user-password: review
+  4-6-soft-delete-user: review
   epic-4-retrospective: optional
 
   # Epic 5: Administer roles and assignments (FR11, FR12, FR13)
