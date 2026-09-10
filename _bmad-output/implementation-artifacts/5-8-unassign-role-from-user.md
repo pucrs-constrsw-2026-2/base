@@ -4,7 +4,7 @@ baseline_commit: 1791eabdae89978a0c5dc6d06b56b5c9464e6c2e
 
 # Story 5.8: Unassign role from user
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 

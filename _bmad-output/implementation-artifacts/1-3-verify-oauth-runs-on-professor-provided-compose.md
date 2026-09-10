@@ -4,7 +4,7 @@ baseline_commit: 1791eabdae89978a0c5dc6d06b56b5c9464e6c2e
 
 # Story 1.3: Verify oauth runs on professor-provided compose
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -25,27 +25,27 @@ so that graders can start the stack without a group-invented compose file.
 
 2. **Given** the professor Keycloak README / compose ops notes
    **When** the oauth README is updated
-   **Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `201`) even if the Keycloak README shows a JSON curl example
+   **Then** it documents: create `constrsw-keycloak-data`, console at `:8081`, API at `:8181`, and that login contract for *our* API remains SPEC/T1 (form-data, `200`) even if the Keycloak README shows a JSON curl example
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Verify build against professor compose (AC: #1)
-  - [ ] From repo root, with Story 1.2 Dockerfile present: `docker compose build oauth`
+- [x] Task 1 — Verify build against professor compose (AC: #1)
+  - [x] From repo root, with Story 1.2 Dockerfile present: `docker compose build oauth`
   - [ ] Do **not** add/uncomment/replace `docker-compose.yml`. If build fails, fix **oauth** (Dockerfile/context), not compose
-- [ ] Task 2 — Verify run + health (AC: #1)
-  - [ ] `docker volume create constrsw-keycloak-data` if missing (external volume already declared)
-  - [ ] Start Keycloak + oauth via professor compose (`docker compose up -d` or equivalent)
-  - [ ] Confirm oauth reaches `healthy` (healthcheck hits `GET /health` on `OAUTH_INTERNAL_API_PORT`)
-  - [ ] From inside the oauth container (or logs), confirm `KEYCLOAK_SERVER_URL` is `http://keycloak:8080` and the hostname `keycloak` resolves on network `constrsw`
+- [x] Task 2 — Verify run + health (AC: #1)
+  - [x] `docker volume create constrsw-keycloak-data` if missing (external volume already declared)
+  - [x] Start Keycloak + oauth via professor compose (`docker compose up -d` or equivalent)
+  - [x] Confirm oauth reaches `healthy` (healthcheck hits `GET /health` on `OAUTH_INTERNAL_API_PORT`)
+  - [x] From inside the oauth container (or logs), confirm `KEYCLOAK_SERVER_URL` is `http://keycloak:8080` and the hostname `keycloak` resolves on network `constrsw`
   - [ ] Do **not** implement `/login` to “prove” Keycloak — resolution + healthy is enough. Login is Story 2.1
-- [ ] Task 3 — oauth README ops (AC: #2)
-  - [ ] Document: `docker volume create constrsw-keycloak-data`; Keycloak console `http://localhost:8081`; oauth API `http://localhost:8181`
-  - [ ] Document: **our** login (Story 2.1) is form-data/`x-www-form-urlencoded` + HTTP `201` per SPEC — **not** the Keycloak README JSON curl to `:8181/login`
-  - [ ] Document import caveat: `--import-realm` only imports if the realm is absent on the volume (professor Keycloak README)
-  - [ ] Do not paste secret values from `.env` or `constrsw.json`
-- [ ] Task 4 — Record verification, no extra deliverables
-  - [ ] Completion notes: commands run + healthy result
-  - [ ] No group `docker-compose.override.yml`, no second `.env`, no committed realm export
+- [x] Task 3 — oauth README ops (AC: #2)
+  - [x] Document: `docker volume create constrsw-keycloak-data`; Keycloak console `http://localhost:8081`; oauth API `http://localhost:8181`
+  - [x] Document: **our** login (Story 2.1) is form-data/`x-www-form-urlencoded` + HTTP `200` per SPEC — **not** the Keycloak README JSON curl to `:8181/login`
+  - [x] Document import caveat: `--import-realm` only imports if the realm is absent on the volume (professor Keycloak README)
+  - [x] Do not paste secret values from `.env` or `constrsw.json`
+- [x] Task 4 — Record verification, no extra deliverables
+  - [x] Completion notes: commands run + healthy result
+  - [x] No group `docker-compose.override.yml`, no second `.env`, no committed realm export
 
 ## Dev Notes
 
@@ -149,7 +149,7 @@ Canonical contract: `_bmad-output/specs/spec-grupo07-keycloak-oauth/` (`SPEC.md`
 
 ## Previous story intelligence
 
-Story 1.2 must ship Dockerfile + `/health` + listen **before** this verify story is meaningful. Story 1.1 supplies env names. Keycloak README (`infrastructure/dev.local/services/keycloak/README.md`) uses JSON `POST http://localhost:8181/login` and mentions service `auth` — **superseded** for Grupo 07 by SPEC/T1 (`oauth`, form-data, `201`).
+Story 1.2 must ship Dockerfile + `/health` + listen **before** this verify story is meaningful. Story 1.1 supplies env names. Keycloak README (`infrastructure/dev.local/services/keycloak/README.md`) uses JSON `POST http://localhost:8181/login` and mentions service `auth` — **superseded** for Grupo 07 by SPEC/T1 (`oauth`, form-data, `200`).
 
 ## Latest tech information
 
