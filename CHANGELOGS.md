@@ -64,6 +64,37 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-11 — Final audit of the T1 scope + submodule pointer
+
+| Field | Value |
+| --- | --- |
+| Author | William Klein |
+| Branch | `oauth` `grupo07-fix/audit-findings` (PR #13, merged); `base` `grupo07-fix/submodule-pointer` |
+| Stories | audit across all six epics — no story status changed |
+| Status | done |
+
+**Summary**
+- Reviewed every source file against the T1 brief. Coverage is complete and there is no dead code, no `TODO`, no `any`, no `@ts-ignore`.
+- Fixed three findings (oauth PR #13): a vacuous test assertion, an inconsistent status, and credentials reaching an error body.
+- **Pointed the `backend/oauth` submodule at the current `grupo07`** — it still referenced `98b634e`, from before the users API.
+
+**Paths touched**
+- `backend/oauth/src/authz/authz-matrix.spec.ts`, `src/auth/keycloak-token.client.ts`, `src/errors/oa-error.mapper.ts`, `README.md`
+- `backend/oauth` (submodule reference), `CHANGELOGS.md`
+
+**Decisions / notes for the next person**
+
+- ⚠️ **Update the submodule pointer whenever the oauth branch advances.** Merging inside the submodule does **not** move the reference the parent stores. It was three merges behind, so `git clone --recurse-submodules` + `docker compose up` would have built an image without the `/users` routes at all. Check `git ls-tree grupo07 backend/oauth` against the submodule's own HEAD before anyone tests.
+- **`rejects.toMatchObject({})` matches any object.** The story 6.5 deny cases used it, so replacing the controller's `forbidden()` with `badRequest()` left all 34 tests green. Assert the status, not merely that something was thrown.
+- **An unreachable Keycloak is `503` everywhere now** — guard, `/login`, `/refresh`, `/authz/validate`. `/login` and `/refresh` previously answered `401`, telling a caller with valid credentials that they were wrong because of an outage on our side.
+- **`error_stack` redacts `access_token`, `refresh_token`, `id_token`, `client_secret` and `password`.** The incomplete-token-response path relayed the upstream payload verbatim, and that payload still holds real tokens. The redaction lives in `OaErrorMapper.fromKeycloak`, so it covers code written later too.
+- 📌 **Still not verified against a running Keycloak.** All 254 tests face a faked upstream: they prove the logic and the contracts, not the wiring. Story 1.3 is that proof.
+
+**Next suggested step**
+- Run the stack for real and walk every route. Worth watching: whether this Keycloak honours `?enabled=` on `GET /users` (the service refilters locally because some setups ignore it), the `Location` header shape on create, and the hierarchical matrix on `POST /authz/validate` with one permitted and one forbidden pair.
+- Update `RESPONSIBILITIES.md`, still describing the original track split.
+
+
 ### 2026-09-10 — Epic 4 (`/users`) + shared Admin client; all six epics now have code
 
 | Field | Value |
