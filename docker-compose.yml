@@ -7,6 +7,7 @@ volumes:
   constrsw-keycloak-data:
     external: true
   grafana-data:
+  prometheus-data:
 
 services:
 
@@ -87,10 +88,31 @@ services:
       start_period: 20s
     restart: always
 
+  # Observability - Metrics Collector
+  prometheus:
+    container_name: prometheus
+    image: prom/prometheus:v2.54.0
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+      - '--web.enable-lifecycle'
+    volumes:
+      - ./infrastructure/dev.local/services/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml
+      - prometheus-data:/prometheus
+    ports:
+      - "${PROMETHEUS_EXTERNAL_PORT}:${PROMETHEUS_INTERNAL_PORT}"
+    networks:
+      - constrsw
+    restart: always
+
   # Observability - Dashboards
   grafana:
     container_name: grafana
     image: grafana/grafana:11.3.0
+    depends_on:
+      - prometheus
     environment:
       - GF_SECURITY_ADMIN_USER=${GRAFANA_ADMIN_USER}
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD}
