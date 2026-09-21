@@ -64,6 +64,52 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-14 — Read oauth client roles from the JWT so admin@pucrs.br can call /users
+
+| Field | Value |
+| --- | --- |
+| Author | AI (Cursor) for EduardoArruda |
+| Branch | `backend/oauth` working tree |
+| Stories | 4.x / 5.x follow-up (AdministratorRoleGuard) |
+| Status | in progress — rebuild oauth image to pick up |
+
+**Summary**
+- Live Postman: after `scope=openid`, `POST /authz/validate` `{ "resource": "rooms" }` returned 200 for `admin@pucrs.br`, but `GET /users` returned 403 (administrator role required).
+- Cause: `AdministratorRoleGuard` read `resource_access.oauth.roles` from **UserInfo**. That body does not include client roles; they are on the access token. Authz already sent the JWT to Keycloak, so rooms succeeded.
+- Overlay JWT `resource_access` / `realm_access` onto `request.user.raw` after UserInfo succeeds. Still require the **client** role `administrator` (realm-only admin remains 403).
+
+**Paths touched**
+- `backend/oauth/src/common/jwt-payload.ts` — decode payload, no signature check
+- `backend/oauth/src/common/bearer-auth.guard.ts` — merge role claims
+- specs + `backend/oauth/README.md`
+
+**Next suggested step**
+- `docker compose up -d --build oauth`, login as `admin@pucrs.br`, `GET /users` should be 200.
+
+### 2026-09-14 — Login/refresh request `scope=openid` so UserInfo (Bearer guard) accepts tokens
+
+| Field | Value |
+| --- | --- |
+| Author | AI (Cursor) for EduardoArruda |
+| Branch | `base` `grupo07` / `backend/oauth` working tree |
+| Stories | 2.1 / 2.2 follow-up (Bearer on 4.x, 5.x, 6.5) |
+| Status | in progress — rebuild oauth image to pick up |
+
+**Summary**
+- Live Postman: `POST /login` returned 200, but `GET /users` and `POST /authz/validate` returned `OA-401` “Access token is invalid or expired” with a fresh token.
+- Cause: password/refresh grants did not send `scope=openid`. Keycloak still issues tokens; UserInfo (used by `BearerAuthGuard`) rejects them. Authz was never reached.
+
+**Paths touched**
+- `backend/oauth/src/auth/keycloak-token.client.ts` — always send `scope=openid`
+- `backend/oauth/src/auth/keycloak-token.client.spec.ts`
+- `backend/oauth/README.md`
+
+**Decisions / notes for the next person**
+- Rebuild the oauth image after this change. Old tokens without `openid` stay unusable; login again.
+
+**Next suggested step**
+- `docker compose up -d --build oauth`, then Postman login → `GET /users` / `/authz/validate`.
+
 ### 2026-09-11 — Final audit of the T1 scope + submodule pointer
 
 | Field | Value |
