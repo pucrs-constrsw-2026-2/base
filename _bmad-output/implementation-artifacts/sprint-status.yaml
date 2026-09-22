@@ -128,5 +128,5 @@ development_status:
 
   # Epic 7: oauth Prometheus pull (sibling spec, not epics.md)
   epic-7: in-progress
-  7-1-expose-oauth-prometheus-metrics: ready-for-dev
+  7-1-expose-oauth-prometheus-metrics: review
   epic-7-retrospective: optional

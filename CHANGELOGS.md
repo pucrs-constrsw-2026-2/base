@@ -64,6 +64,43 @@ Related docs:
 
 ## Log entries
 
+### 2026-09-22 — Oauth Prometheus metrics (OpenTelemetry pull)
+
+| Field | Value |
+| --- | --- |
+| Author | AI (Cursor) for EduardoArruda |
+| Branch | `base` `grupo07-feat/telemetry` / `backend/oauth` `grupo07-fix/bearer-userinfo` |
+| Stories | 7.1 → review (`sprint-status.yaml`: `epic-7` in-progress) |
+| Status | in progress — code is in the working tree, not committed |
+
+**Summary**
+- Oauth exposes Prometheus text on `OAUTH_INTERNAL_METRICS_PORT` (default 9464, path `/metrics`) with an in-process OpenTelemetry SDK. `service.name` is `oauth`. HTTP duration only; login, refresh, users, roles, authz, and the OA envelope were not changed.
+- Professor scrape job renamed from `auth` to `oauth`, target `oauth:9464`. Blackbox probe is `http://oauth:3001/health`. Compose and `.env` were not edited.
+- Live check: `http://localhost:8381/metrics` returns `http_server_request_duration`. `GET /health` is still `{ status: "ok" }`. Jest in `backend/oauth`: 24 suites, 269 tests passed.
+
+**Paths touched**
+- `backend/oauth/src/telemetry/instrument.ts` — patch Node `http`/`https` before the SDK loads
+- `backend/oauth/src/telemetry/register.ts` — start the SDK and Prometheus exporter; `register.spec.ts`
+- `backend/oauth/src/main.ts` — import telemetry before Nest
+- `backend/oauth/src/config/keycloak.config.ts` — `OAUTH_INTERNAL_METRICS_PORT` (default 9464)
+- `backend/oauth/package.json`, `package-lock.json` — `@opentelemetry/api` 1.9.1, `sdk-node` / `exporter-prometheus` / `instrumentation-http` 0.221.0
+- `backend/oauth/Dockerfile` — `EXPOSE 9464`
+- `infrastructure/dev.local/services/prometheus/prometheus.yml` — job `oauth`
+- `_bmad-output/specs/spec-grupo07-oauth-observability/` — sibling spec (CAP-1..4)
+- `_bmad-output/implementation-artifacts/7-1-expose-oauth-prometheus-metrics.md`, `sprint-status.yaml`
+
+**Decisions / notes for the next person**
+- Pull only. `spanProcessors` and `logRecordProcessors` are empty so the SDK does not push OTLP traces or logs. Do not add `prom-client`, auto-instrumentations, or a second listener on 9464.
+- `instrument.ts` must patch `http` before `@opentelemetry/sdk-node` is imported. A later patch never sees the Nest server.
+- The series has method and status (`http_request_method`, `http_response_status_code`) and no URL path. `GET` 200 climbs on its own: compose health check every 15s, Prometheus scrape of `/metrics` every 10s, and the blackbox probe. One `POST /login` adds 1 to the POST row only.
+- The Prometheus UI at `:9090` does not auto-refresh the graph. Re-run the query, or poll `http_server_request_duration_count{job="oauth"}`.
+- Pins stay at 0.221.0. Exporter versions below 0.217.0 crash on a malformed scrape (CVE-2026-44902).
+- Grafana, alert edits, and business counters are out of scope. T1 capability IDs stay as they are; Prometheus for oauth is owned by the sibling spec.
+- ⚠️ After committing inside `backend/oauth`, move the parent submodule pointer. The telemetry files are still uncommitted on `grupo07-fix/bearer-userinfo`.
+
+**Next suggested step**
+- Code-review story 7.1, then commit the oauth submodule and the parent (`prometheus.yml`, story, sprint status) and update the submodule pointer.
+
 ### 2026-09-14 — Read oauth client roles from the JWT so admin@pucrs.br can call /users
 
 | Field | Value |

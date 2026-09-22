@@ -1,6 +1,10 @@
+---
+baseline_commit: bd45a4a8b37e96359a58a73d4ad817106d1623c9
+---
+
 # Story 7.1: Expose oauth Prometheus metrics
 
-Status: ready-for-dev
+Status: review
 
 <!-- Note: Validation is optional. Run validate-create-story for quality check before dev-story. -->
 
@@ -39,33 +43,33 @@ so that the professor Prometheus scrape can see oauth without changing login, us
 
 ## Tasks / Subtasks
 
-- [ ] Task 1 — Pin the SDK in `backend/oauth` (AC: #1)
-  - [ ] Install exact versions: `@opentelemetry/api@1.9.1`, `@opentelemetry/sdk-node@0.221.0`, `@opentelemetry/exporter-prometheus@0.221.0`, `@opentelemetry/instrumentation-http@0.221.0`
-  - [ ] Do not install `@opentelemetry/auto-instrumentations-node`, `prom-client`, or any `exporter-trace-otlp-*` / `exporter-metrics-otlp-*` package
-  - [ ] Do not upgrade `sdk-node` to 0.222.0. Stay on the 0.221.0 line (CVE-2026-44902 is fixed at >= 0.217.0)
-- [ ] Task 2 — One metrics port reader (AC: #1)
-  - [ ] Add `internalMetricsPort` to `OAuthServiceSettings` in `src/config/keycloak.config.ts`, using the existing `port()` helper, env name `OAUTH_INTERNAL_METRICS_PORT`, default `9464`
-  - [ ] Export a function that reads only that port (it must not call `buildAppConfig`, which requires `KEYCLOAK_SERVER_URL` and `KEYCLOAK_CLIENT_SECRET`)
-  - [ ] Add a `internalMetricsPort` getter on `KeycloakSettingsService` next to `internalApiPort`
-  - [ ] Extend `keycloak.config.spec.ts` with the same default / numeric / invalid cases already used for `OAUTH_INTERNAL_API_PORT`
-- [ ] Task 3 — Start the SDK before Nest (AC: #1, #2)
-  - [ ] Add `src/telemetry/register.ts`. It imports no Nest module. It starts one `NodeSDK` with `serviceName: 'oauth'`, `metricReader: new PrometheusExporter({ host: '0.0.0.0', port })`, and `instrumentations: [new HttpInstrumentation()]`
-  - [ ] Do not set `traceExporter`. Do not set `OTEL_EXPORTER_OTLP_*`. Do not pass `headersToSpanAttributes` for `authorization` or any credential header
-  - [ ] `src/main.ts` first import is `./telemetry/register`, and `startTelemetry()` runs before `NestFactory.create`. The API listen stays `settings.internalApiPort` on `0.0.0.0`
-  - [ ] Export `stopTelemetry()` and call it on `SIGTERM` after `sdk.shutdown()`
-  - [ ] Do not start the SDK from `AppModule`, a provider, or `onModuleInit`. Existing specs import `AppModule` statically; a listener there binds the port in every suite
-- [ ] Task 4 — Metrics Jest spec (AC: #1, #2, #3, #4)
-  - [ ] New spec, not an edit of `health.controller.spec.ts`. Set `OAUTH_INTERNAL_METRICS_PORT` to `19464` before the telemetry module loads. Use a dynamic `import()` of the register module and of `AppModule` after that env write. A static import is too late: TypeScript hoists it and loads `http` before the SDK
-  - [ ] `GET /health` on the Nest server still expects `{ status: 'ok' }`
-  - [ ] `GET http://127.0.0.1:19464/metrics` expects 200, a `# HELP` or `# TYPE` line, and an `http_server_request_duration` or `http_server_duration` series
-  - [ ] Plant sentinels `pw-sentinel-do-not-leak`, `client-secret-sentinel-do-not-leak`, and `Bearer access-token-sentinel-do-not-leak`. Assert none appear in the metrics body
-  - [ ] `afterAll`: `stopTelemetry()` so the port is released
-- [ ] Task 5 — Image and scrape retarget (AC: #1, #5)
-  - [ ] `backend/oauth/Dockerfile`: `EXPOSE 9464` beside `3001`. `CMD` stays `node dist/main` because the register import lives in `main.ts`
-  - [ ] Parent repo only: edit the two spots in `infrastructure/dev.local/services/prometheus/prometheus.yml` described in the scrape contract. Do not touch compose, `.env`, the collector, alerts, or other jobs
-- [ ] Task 6 — Regression
-  - [ ] `npm test` in `backend/oauth` passes, including the existing health, login, users, roles, and authz specs
-  - [ ] Do not edit those controllers, the OA filter, or the bearer guard
+- [x] Task 1 — Pin the SDK in `backend/oauth` (AC: #1)
+  - [x] Install exact versions: `@opentelemetry/api@1.9.1`, `@opentelemetry/sdk-node@0.221.0`, `@opentelemetry/exporter-prometheus@0.221.0`, `@opentelemetry/instrumentation-http@0.221.0`
+  - [x] Do not install `@opentelemetry/auto-instrumentations-node`, `prom-client`, or any `exporter-trace-otlp-*` / `exporter-metrics-otlp-*` package
+  - [x] Do not upgrade `sdk-node` to 0.222.0. Stay on the 0.221.0 line (CVE-2026-44902 is fixed at >= 0.217.0)
+- [x] Task 2 — One metrics port reader (AC: #1)
+  - [x] Add `internalMetricsPort` to `OAuthServiceSettings` in `src/config/keycloak.config.ts`, using the existing `port()` helper, env name `OAUTH_INTERNAL_METRICS_PORT`, default `9464`
+  - [x] Export a function that reads only that port (it must not call `buildAppConfig`, which requires `KEYCLOAK_SERVER_URL` and `KEYCLOAK_CLIENT_SECRET`)
+  - [x] Add a `internalMetricsPort` getter on `KeycloakSettingsService` next to `internalApiPort`
+  - [x] Extend `keycloak.config.spec.ts` with the same default / numeric / invalid cases already used for `OAUTH_INTERNAL_API_PORT`
+- [x] Task 3 — Start the SDK before Nest (AC: #1, #2)
+  - [x] Add `src/telemetry/register.ts`. It imports no Nest module. It starts one `NodeSDK` with `serviceName: 'oauth'`, `metricReader: new PrometheusExporter({ host: '0.0.0.0', port })`, and `instrumentations: [new HttpInstrumentation()]`
+  - [x] Do not set `traceExporter`. Do not set `OTEL_EXPORTER_OTLP_*`. Do not pass `headersToSpanAttributes` for `authorization` or any credential header
+  - [x] `src/main.ts` first import is `./telemetry/register`, and `startTelemetry()` runs before `NestFactory.create`. The API listen stays `settings.internalApiPort` on `0.0.0.0`
+  - [x] Export `stopTelemetry()` and call it on `SIGTERM` after `sdk.shutdown()`
+  - [x] Do not start the SDK from `AppModule`, a provider, or `onModuleInit`. Existing specs import `AppModule` statically; a listener there binds the port in every suite
+- [x] Task 4 — Metrics Jest spec (AC: #1, #2, #3, #4)
+  - [x] New spec, not an edit of `health.controller.spec.ts`. Set `OAUTH_INTERNAL_METRICS_PORT` to `19464` before the telemetry module loads. Use a dynamic `import()` of the register module and of `AppModule` after that env write. A static import is too late: TypeScript hoists it and loads `http` before the SDK
+  - [x] `GET /health` on the Nest server still expects `{ status: 'ok' }`
+  - [x] `GET http://127.0.0.1:19464/metrics` expects 200, a `# HELP` or `# TYPE` line, and an `http_server_request_duration` or `http_server_duration` series
+  - [x] Plant sentinels `pw-sentinel-do-not-leak`, `client-secret-sentinel-do-not-leak`, and `Bearer access-token-sentinel-do-not-leak`. Assert none appear in the metrics body
+  - [x] `afterAll`: `stopTelemetry()` so the port is released
+- [x] Task 5 — Image and scrape retarget (AC: #1, #5)
+  - [x] `backend/oauth/Dockerfile`: `EXPOSE 9464` beside `3001`. `CMD` stays `node dist/main` because the register import lives in `main.ts`
+  - [x] Parent repo only: edit the two spots in `infrastructure/dev.local/services/prometheus/prometheus.yml` described in the scrape contract. Do not touch compose, `.env`, the collector, alerts, or other jobs
+- [x] Task 6 — Regression
+  - [x] `npm test` in `backend/oauth` passes, including the existing health, login, users, roles, and authz specs
+  - [x] Do not edit those controllers, the OA filter, or the bearer guard
 
 ## Dev Notes
 
@@ -166,10 +170,36 @@ In job `health-checks`, replace `http://auth:3001/health` with `http://oauth:300
 
 ### Agent Model Used
 
+Grok 4.7
+
 ### Debug Log References
+
+- Jest could not see HTTP metrics until `http.Server` was patched on the module Nest actually uses. `@opentelemetry/sdk-node` loads `http` as soon as it is imported, so `src/telemetry/instrument.ts` patches `http` and `https` before that import.
+- NodeSDK 0.221.0 defaults to an OTLP trace and log exporter when those options are omitted. `spanProcessors` and `logRecordProcessors` are empty arrays so nothing is pushed.
+- The SDK deprecates `metricReader` in favor of `metricReaders`. The Prometheus exporter is the only reader.
 
 ### Completion Notes List
 
 - Ultimate context engine analysis completed - comprehensive developer guide created
+- Oauth listens for Prometheus scrapes on `OAUTH_INTERNAL_METRICS_PORT` (default 9464, path `/metrics`) via the OpenTelemetry Prometheus exporter. `service.name` is `oauth`.
+- HTTP instrumentation starts before Nest. `GET /health` still returns `{ status: "ok" }`. A scrape after that call includes an `http_server_request_duration` series. Password, client secret, and bearer token sentinels are absent from the text.
+- Professor `prometheus.yml` job is `oauth` targeting `oauth:9464`. The blackbox health URL is `http://oauth:3001/health`. Compose and `.env` were not edited.
+- `npm test` in `backend/oauth`: 24 suites, 269 tests, all passed. `nest build` succeeded.
 
 ### File List
+
+- backend/oauth/package.json
+- backend/oauth/package-lock.json
+- backend/oauth/Dockerfile
+- backend/oauth/src/main.ts
+- backend/oauth/src/config/keycloak.config.ts
+- backend/oauth/src/config/keycloak.config.spec.ts
+- backend/oauth/src/config/keycloak-settings.service.ts
+- backend/oauth/src/telemetry/instrument.ts
+- backend/oauth/src/telemetry/register.ts
+- backend/oauth/src/telemetry/register.spec.ts
+- infrastructure/dev.local/services/prometheus/prometheus.yml
+
+## Change Log
+
+- 2026-09-21: Expose oauth Prometheus metrics on the professor metrics port and retarget the scrape from `auth` to `oauth`.
