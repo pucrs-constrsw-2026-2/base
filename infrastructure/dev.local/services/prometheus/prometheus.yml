@@ -20,9 +20,13 @@ scrape_configs:
     scrape_interval: 10s
 
   # Auth Service (NestJS — OpenTelemetry Prometheus exporter)
+  # Nota (grupo03): o container/servico no docker-compose.yml se chama
+  # "oauth", nao "auth" - alvo corrigido pra bater com o nome real do
+  # servico na rede docker (job_name mantido igual pra nao quebrar
+  # dashboards/alerts que já referenciam job="auth").
   - job_name: 'auth'
     static_configs:
-      - targets: ['auth:9464']
+      - targets: ['oauth:9464']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
@@ -116,7 +120,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-        - http://auth:3001/health
+        - http://oauth:3001/health
         - http://keycloak:9001/health/ready
         - http://courses:8080/api/v1/health
         - http://professors:3002/health
