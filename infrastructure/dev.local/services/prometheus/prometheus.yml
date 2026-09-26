@@ -19,10 +19,10 @@ scrape_configs:
     metrics_path: '/metrics'
     scrape_interval: 10s
 
-  # Auth Service (NestJS — OpenTelemetry Prometheus exporter)
-  - job_name: 'auth'
+  # OAuth Service (NestJS — prom-client, na porta da API)
+  - job_name: 'oauth'
     static_configs:
-      - targets: ['auth:9464']
+      - targets: ['oauth:8088']
     metrics_path: '/metrics'
     scrape_interval: 10s
 
@@ -116,7 +116,7 @@ scrape_configs:
       module: [http_2xx]
     static_configs:
       - targets:
-        - http://auth:3001/health
+        - http://oauth:8088/health
         - http://keycloak:9001/health/ready
         - http://courses:8080/api/v1/health
         - http://professors:3002/health
